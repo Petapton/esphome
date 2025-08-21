@@ -8,6 +8,7 @@
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 #include "esphome/components/climate/climate.h"
+#include "setpoint_adapter.h"
 
 #ifdef USE_ESP32
 
@@ -20,6 +21,11 @@ namespace esphome {
 namespace madoka {
 
 static const char *const TAG = "madoka";
+
+enum SetpointMode : uint8_t {
+  SETPOINT_MODE_SINGLE = 0,
+  SETPOINT_MODE_DUAL = 1,
+};
 
 struct Setpoint {
   uint16_t cooling;
@@ -58,6 +64,7 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
   uint16_t wwr_handle_;
   SemaphoreHandle_t receive_semaphore_ = nullptr;
   Status cur_status_;
+  SetpointMode setpoint_mode_{SETPOINT_MODE_DUAL};
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);
@@ -76,16 +83,22 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
   void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
+  void set_setpoint_mode(SetpointMode mode) { this->setpoint_mode_ = mode; }
   climate::ClimateTraits traits() override {
     auto traits = climate::ClimateTraits();
-    traits.set_supported_modes({
+    std::set<climate::ClimateMode> supported_modes = {
         climate::CLIMATE_MODE_OFF,
-        climate::CLIMATE_MODE_HEAT_COOL,
         climate::CLIMATE_MODE_COOL,
         climate::CLIMATE_MODE_HEAT,
         climate::CLIMATE_MODE_FAN_ONLY,
         climate::CLIMATE_MODE_DRY,
-    });
+    };
+    
+    if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
+      supported_modes.insert(climate::CLIMATE_MODE_HEAT_COOL);
+    }
+    
+    traits.set_supported_modes(supported_modes);
     traits.set_supported_fan_modes({
         climate::CLIMATE_FAN_LOW,
         climate::CLIMATE_FAN_MEDIUM,
@@ -95,7 +108,7 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
     traits.set_visual_min_temperature(16);
     traits.set_visual_max_temperature(32);
     traits.set_visual_temperature_step(1);
-    traits.set_supports_two_point_target_temperature(true);
+    traits.set_supports_two_point_target_temperature(this->setpoint_mode_ == SETPOINT_MODE_DUAL);
     traits.set_supports_current_temperature(true);
     return traits;
   }
