@@ -22,10 +22,7 @@ namespace madoka {
 
 static const char *const TAG = "madoka";
 
-enum SetpointMode : uint8_t {
-  SETPOINT_MODE_SINGLE = 0,
-  SETPOINT_MODE_DUAL = 1,
-};
+using internal::SetpointAdapter;
 
 struct Setpoint {
   uint16_t cooling;
@@ -64,7 +61,7 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
   uint16_t wwr_handle_;
   SemaphoreHandle_t receive_semaphore_ = nullptr;
   Status cur_status_;
-  SetpointMode setpoint_mode_{SETPOINT_MODE_DUAL};
+  SetpointAdapter setpoint_adapter_;
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);
@@ -75,6 +72,8 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
   void control(const climate::ClimateCall &call) override;
 
  public:
+  Madoka() : setpoint_adapter_(this, SetpointMode::SETPOINT_MODE_DUAL) {}
+
   void setup() override;
   void loop() override;
   void update() override;
@@ -83,21 +82,18 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
   void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
-  void set_setpoint_mode(SetpointMode mode) { this->setpoint_mode_ = mode; }
+  void set_setpoint_mode(SetpointMode mode) { setpoint_adapter_.setMode(mode); }
   climate::ClimateTraits traits() override {
     auto traits = climate::ClimateTraits();
     std::set<climate::ClimateMode> supported_modes = {
-        climate::CLIMATE_MODE_OFF,
-        climate::CLIMATE_MODE_COOL,
-        climate::CLIMATE_MODE_HEAT,
-        climate::CLIMATE_MODE_FAN_ONLY,
-        climate::CLIMATE_MODE_DRY,
+        climate::CLIMATE_MODE_OFF,      climate::CLIMATE_MODE_COOL, climate::CLIMATE_MODE_HEAT,
+        climate::CLIMATE_MODE_FAN_ONLY, climate::CLIMATE_MODE_DRY,
     };
-    
-    if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
+
+    if (setpoint_adapter_.isDualMode()) {
       supported_modes.insert(climate::CLIMATE_MODE_HEAT_COOL);
     }
-    
+
     traits.set_supported_modes(supported_modes);
     traits.set_supported_fan_modes({
         climate::CLIMATE_FAN_LOW,
@@ -108,7 +104,7 @@ class Madoka : public climate::Climate, public esphome::ble_client::BLEClientNod
     traits.set_visual_min_temperature(16);
     traits.set_visual_max_temperature(32);
     traits.set_visual_temperature_step(1);
-    traits.set_supports_two_point_target_temperature(this->setpoint_mode_ == SETPOINT_MODE_DUAL);
+    traits.set_supports_two_point_target_temperature(setpoint_adapter_.isDualMode());
     traits.set_supports_current_temperature(true);
     return traits;
   }

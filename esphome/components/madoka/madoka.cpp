@@ -82,23 +82,9 @@ void Madoka::control(const ClimateCall &call) {
     }
     this->query_(CMD_SET_SETTING_STATUS, std::vector<uint8_t>{0x20, 0x01, (uint8_t) status_out}, 200);
   }
-  if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
-    if (call.get_target_temperature_low().has_value() && call.get_target_temperature_high().has_value()) {
-      uint16_t target_low = *call.get_target_temperature_low() * 128;
-      uint16_t target_high = *call.get_target_temperature_high() * 128;
-      this->query_(CMD_SET_SETPOINT,
-                   std::vector<uint8_t>{0x20, 0x02, (uint8_t) ((target_high >> 8) & 0xFF), (uint8_t) (target_high & 0xFF),
-                                        0x21, 0x02, (uint8_t) ((target_low >> 8) & 0xFF), (uint8_t) (target_low & 0xFF)},
-                   400);
-    }
-  } else {
-    if (call.get_target_temperature().has_value()) {
-      uint16_t target_temp = *call.get_target_temperature() * 128;
-      this->query_(CMD_SET_SETPOINT,
-                   std::vector<uint8_t>{0x20, 0x02, (uint8_t) ((target_temp >> 8) & 0xFF), (uint8_t) (target_temp & 0xFF),
-                                        0x21, 0x02, (uint8_t) ((target_temp >> 8) & 0xFF), (uint8_t) (target_temp & 0xFF)},
-                   400);
-    }
+  auto setpoint_cmd = setpoint_adapter_.buildSetpointCommand(call);
+  if (!setpoint_cmd.empty()) {
+    this->query_(CMD_SET_SETPOINT, setpoint_cmd, 400);
   }
   if (call.get_fan_mode().has_value()) {
     uint8_t fan_mode = call.get_fan_mode().value();
@@ -167,10 +153,7 @@ void Madoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc
   switch (event) {
     case ESP_GATTC_DISCONNECT_EVT: {
       this->node_state = espbt::ClientState::IDLE;  // ??
-      this->current_temperature = NAN;
-      this->target_temperature = NAN;
-      this->target_temperature_high = NAN;
-      this->target_temperature_low = NAN;
+      setpoint_adapter_.resetTemperatures();
       this->publish_state();
       break;
     }
@@ -354,7 +337,7 @@ void Madoka::parse_cb_(std::vector<uint8_t> msg) {
             this->mode = climate::CLIMATE_MODE_DRY;
             break;
           case 2:
-            if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
+            if (setpoint_adapter_.isDualMode()) {
               this->mode = climate::CLIMATE_MODE_HEAT_COOL;
             } else {
               this->mode = climate::CLIMATE_MODE_HEAT;
@@ -379,21 +362,13 @@ void Madoka::parse_cb_(std::vector<uint8_t> msg) {
           case 0x20: {
             std::vector<uint8_t> val(msg.begin() + i, msg.begin() + i + len);
             float temp_high = (float) (val[0] << 8 | val[1]) / 128;
-            if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
-              this->target_temperature_high = temp_high;
-            } else {
-              this->target_temperature = temp_high;
-            }
+            setpoint_adapter_.handleHighTemperature(temp_high);
             break;
           }
           case 0x21: {
             std::vector<uint8_t> val(msg.begin() + i, msg.begin() + i + len);
             float temp_low = (float) (val[0] << 8 | val[1]) / 128;
-            if (this->setpoint_mode_ == SETPOINT_MODE_DUAL) {
-              this->target_temperature_low = temp_low;
-            } else {
-              this->target_temperature = temp_low;
-            }
+            setpoint_adapter_.handleLowTemperature(temp_low);
             break;
           }
         }
