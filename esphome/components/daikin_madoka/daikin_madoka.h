@@ -58,6 +58,10 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   uint16_t wwr_handle_;
   SemaphoreHandle_t receive_semaphore_ = nullptr;
   Status cur_status_;
+  // Sticky last HA-set mode. The BRC1H stores the last non-fan operation_mode in 0x20
+  // and does not expose the fan flag in CMD_GET_OPERATION_MODE — without this we'd
+  // overwrite FAN_ONLY back to COOL/HEAT on every poll.
+  climate::ClimateMode last_set_mode_ = climate::CLIMATE_MODE_OFF;
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);

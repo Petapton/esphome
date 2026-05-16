@@ -81,6 +81,7 @@ void DaikinMadoka::control(const ClimateCall &call) {
       this->query_(CMD_SET_OPERATION_MODE, std::vector<uint8_t>{0x20, 0x01, (uint8_t) mode_out}, 600);
     }
     this->query_(CMD_SET_SETTING_STATUS, std::vector<uint8_t>{0x20, 0x01, (uint8_t) status_out}, 200);
+    this->last_set_mode_ = mode;
   }
   std::vector<uint8_t> temp_setpoint_args;
   if (call.get_target_temperature_high().has_value()) {
@@ -341,8 +342,17 @@ void DaikinMadoka::parse_cb_(std::vector<uint8_t> msg) {
     case CMD_GET_OPERATION_MODE:
       // ESP_LOGI(TAG, "status: %d, mode: %d", this->cur_status_.status, this->cur_status_.mode);
       if (this->cur_status_.status) {
+        // Sticky FAN_ONLY: the BRC1H silently resets the transient fan flag and reverts
+        // CMD_GET_OPERATION_MODE back to the last main mode ~10-30s after our SET. The fan
+        // flag is not exposed in 0x0030 readbacks, so we trust the last HA-issued mode and
+        // ignore non-fan readbacks while the user-requested mode is FAN_ONLY.
+        if (this->last_set_mode_ == climate::CLIMATE_MODE_FAN_ONLY &&
+            this->cur_status_.mode != 0 && this->cur_status_.mode != 5) {
+          break;
+        }
         switch (this->cur_status_.mode) {
           case 0:
+          case 5:
             this->mode = climate::CLIMATE_MODE_FAN_ONLY;
             break;
           case 1:
@@ -360,6 +370,7 @@ void DaikinMadoka::parse_cb_(std::vector<uint8_t> msg) {
         }
       } else {
         this->mode = climate::CLIMATE_MODE_OFF;
+        this->last_set_mode_ = climate::CLIMATE_MODE_OFF;
       }
       break;
     case CMD_GET_SETPOINT:
