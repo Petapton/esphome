@@ -124,6 +124,32 @@ void DaikinMadoka::control(const ClimateCall &call) {
   this->should_update_ = true;
 }
 
+void DaikinMadoka::try_register_notifications_() {
+  if (!this->search_complete_ || !this->auth_complete_) {
+    ESP_LOGD(TAG, "[%s] Waiting for both search (%s) and auth (%s) to complete",
+             this->get_name().c_str(),
+             this->search_complete_ ? "done" : "pending",
+             this->auth_complete_ ? "done" : "pending");
+    return;
+  }
+  auto *nfy = this->parent_->get_characteristic(MADOKA_SERVICE_UUID, NOTIFY_CHARACTERISTIC_UUID);
+  auto *wwr = this->parent_->get_characteristic(MADOKA_SERVICE_UUID, WWR_CHARACTERISTIC_UUID);
+  if (nfy == nullptr || wwr == nullptr) {
+    ESP_LOGW(TAG, "[%s] No control service found at device, not a Daikin Madoka..?", this->get_name().c_str());
+    return;
+  }
+  this->notify_handle_ = nfy->handle;
+  this->wwr_handle_ = wwr->handle;
+
+  auto status = esp_ble_gattc_register_for_notify(this->parent_->get_gattc_if(), this->parent_->get_remote_bda(),
+                                                  nfy->handle);
+  if (status) {
+    ESP_LOGW(TAG, "[%s] esp_ble_gattc_register_for_notify failed, status=%d", this->get_name().c_str(), status);
+  } else {
+    ESP_LOGI(TAG, "[%s] Successfully registered for notifications", this->get_name().c_str());
+  }
+}
+
 void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
   switch (event) {
     case ESP_GAP_BLE_SEC_REQ_EVT:
@@ -138,20 +164,8 @@ void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_c
         ESP_LOGE(TAG, "Authentication failed, status: 0x%x", param->ble_security.auth_cmpl.fail_reason);
         break;
       }
-      auto *nfy = this->parent_->get_characteristic(MADOKA_SERVICE_UUID, NOTIFY_CHARACTERISTIC_UUID);
-      auto *wwr = this->parent_->get_characteristic(MADOKA_SERVICE_UUID, WWR_CHARACTERISTIC_UUID);
-      if (nfy == nullptr || wwr == nullptr) {
-        ESP_LOGW(TAG, "[%s] No control service found at device, not a Daikin Madoka..?", this->get_name().c_str());
-        break;
-      }
-      this->notify_handle_ = nfy->handle;
-      this->wwr_handle_ = wwr->handle;
-
-      auto status = esp_ble_gattc_register_for_notify(this->parent_->get_gattc_if(), this->parent_->get_remote_bda(),
-                                                      nfy->handle);
-      if (status) {
-        ESP_LOGW(TAG, "[%s] esp_ble_gattc_register_for_notify failed, status=%d", this->get_name().c_str(), status);
-      }
+      this->auth_complete_ = true;
+      this->try_register_notifications_();
       break;
     }
     default:
@@ -163,7 +177,9 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
                                        esp_ble_gattc_cb_param_t *param) {
   switch (event) {
     case ESP_GATTC_DISCONNECT_EVT: {
-      this->node_state = espbt::ClientState::IDLE;  // ??
+      this->node_state = espbt::ClientState::IDLE;
+      this->search_complete_ = false;
+      this->auth_complete_ = false;
       this->current_temperature = NAN;
       this->target_temperature = NAN;
       this->publish_state();
@@ -179,7 +195,9 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
       }
       break;
     case ESP_GATTC_SEARCH_CMPL_EVT: {
+      this->search_complete_ = true;
       esp_ble_set_encryption(this->parent_->get_remote_bda(), ESP_BLE_SEC_ENCRYPT_MITM);
+      this->try_register_notifications_();
       break;
     }
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {

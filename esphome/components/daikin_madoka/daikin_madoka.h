@@ -52,6 +52,8 @@ static const espbt::ESPBTUUID WWR_CHARACTERISTIC_UUID =
 class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLEClientNode, public PollingComponent {
  protected:
   bool should_update_ = false;
+  bool search_complete_ = false;
+  bool auth_complete_ = false;
   std::queue<std::vector<uint8_t>> received_chunks_ = {};
   std::map<uint8_t, std::vector<uint8_t>> pending_chunks_ = {};
   uint16_t notify_handle_;
@@ -64,6 +66,7 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   void query_(uint16_t cmd, std::vector<uint8_t> args, int t_d);
   void parse_cb_(std::vector<uint8_t> msg);
   void process_incoming_chunk_(std::vector<uint8_t> chk);
+  void try_register_notifications_();
 
   void control(const climate::ClimateCall &call) override;
 
