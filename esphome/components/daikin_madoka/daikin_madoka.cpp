@@ -213,7 +213,7 @@ void DaikinMadoka::update() {
   std::vector<uint16_t> all_cmds{CMD_GET_SETTING_STATUS, CMD_GET_OPERATION_MODE, CMD_GET_SETPOINT, CMD_GET_FAN_SPEED,
                                  CMD_GET_SENSOR_INFORMATION};
   for (auto cmd : all_cmds) {
-    this->query_(cmd, std::vector<uint8_t>{0x00, 0x00}, 50);
+    this->query_(cmd, std::vector<uint8_t>{0x00, 0x00}, 200);
   }
 }
 
