@@ -45,6 +45,7 @@ void DaikinMadoka::loop() {
 void DaikinMadoka::control(const ClimateCall &call) {
   if (this->node_state != espbt::ClientState::ESTABLISHED)
     return;
+  this->last_control_ms_ = millis();
   if (call.get_mode().has_value()) {
     ClimateMode mode = *call.get_mode();
     uint8_t mode_out = 255, status_out = 0;
@@ -209,6 +210,11 @@ void DaikinMadoka::update() {
     ESP_LOGD(TAG, "...but device is disconnected");
     return;
   }
+  if (this->last_control_ms_ > 0 && millis() - this->last_control_ms_ < 5000) {
+    ESP_LOGD(TAG, "...skipping, cooldown after control command");
+    return;
+  }
+  this->last_control_ms_ = 0;
 
   std::vector<uint16_t> all_cmds{CMD_GET_SETTING_STATUS, CMD_GET_OPERATION_MODE, CMD_GET_SETPOINT, CMD_GET_FAN_SPEED,
                                  CMD_GET_SENSOR_INFORMATION};
