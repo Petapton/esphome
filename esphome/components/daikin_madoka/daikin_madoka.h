@@ -58,6 +58,15 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   uint16_t wwr_handle_;
   SemaphoreHandle_t receive_semaphore_ = nullptr;
   Status cur_status_;
+  // Status retry guard. The BRC1H sometimes drops the SET_SETTING_STATUS chunk
+  // silently (typically when one ESP juggles two BRC1H pairs at once over BLE).
+  // The unit then stays physically off even though we just told it to turn on,
+  // and the next poll reports status=0 and flips climate::mode to OFF in HA.
+  // Remember the requested status for a short window and re-issue
+  // SET_SETTING_STATUS if the readback disagrees, up to a small cap.
+  uint8_t last_set_status_byte_{0};
+  uint32_t last_set_ms_{0};
+  uint8_t status_retry_count_{0};
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);

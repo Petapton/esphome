@@ -20,6 +20,12 @@ static const uint16_t CMD_GET_FAN_SPEED = 0x0050;
 static const uint16_t CMD_SET_FAN_SPEED = 0x4050;
 static const uint16_t CMD_GET_SENSOR_INFORMATION = 0x0110;
 
+// Status retry parameters: if the BRC1H reports a status that disagrees with
+// the last HA-issued status within this window, re-send SET_SETTING_STATUS up
+// to MAX_STATUS_RETRIES times before accepting the readback as truth.
+static const uint32_t STATUS_RETRY_WINDOW_MS = 30000;
+static const uint8_t MAX_STATUS_RETRIES = 2;
+
 void DaikinMadoka::dump_config() { LOG_CLIMATE(TAG, "Daikin Madoka Climate Controller", this); }
 
 void DaikinMadoka::setup() { this->receive_semaphore_ = xSemaphoreCreateMutex(); }
@@ -81,6 +87,9 @@ void DaikinMadoka::control(const ClimateCall &call) {
       this->query_(CMD_SET_OPERATION_MODE, std::vector<uint8_t>{0x20, 0x01, (uint8_t) mode_out}, 600);
     }
     this->query_(CMD_SET_SETTING_STATUS, std::vector<uint8_t>{0x20, 0x01, (uint8_t) status_out}, 200);
+    this->last_set_status_byte_ = static_cast<uint8_t>(status_out);
+    this->last_set_ms_ = millis();
+    this->status_retry_count_ = 0;
   }
   std::vector<uint8_t> temp_setpoint_args;
   if (call.get_target_temperature_high().has_value()) {
@@ -320,6 +329,25 @@ void DaikinMadoka::parse_cb_(std::vector<uint8_t> msg) {
           this->cur_status_.status = val[0];
         }
         i += len;
+      }
+      // Status retry guard — see header comment on last_set_status_byte_.
+      if (this->last_set_ms_ > 0 &&
+          (millis() - this->last_set_ms_) < STATUS_RETRY_WINDOW_MS &&
+          ((uint8_t) (this->cur_status_.status ? 1 : 0)) != this->last_set_status_byte_ &&
+          this->status_retry_count_ < MAX_STATUS_RETRIES) {
+        this->status_retry_count_++;
+        ESP_LOGW(TAG,
+                 "[%s] SETTING_STATUS readback mismatch (got=%d, expected=%d), retry %d/%d",
+                 this->get_name().c_str(),
+                 (int) (this->cur_status_.status ? 1 : 0),
+                 (int) this->last_set_status_byte_,
+                 (int) this->status_retry_count_,
+                 (int) MAX_STATUS_RETRIES);
+        this->query_(CMD_SET_SETTING_STATUS,
+                     std::vector<uint8_t>{0x20, 0x01, this->last_set_status_byte_}, 200);
+        // Don't let the rest of parse_cb_ act on the stale readback — pretend the
+        // pulse acknowledged what we asked for; the next poll round will confirm.
+        this->cur_status_.status = (this->last_set_status_byte_ != 0);
       }
       break;
     case CMD_GET_OPERATION_MODE:
