@@ -67,6 +67,15 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   uint8_t last_set_status_byte_{0};
   uint32_t last_set_ms_{0};
   uint8_t status_retry_count_{0};
+  // Mode retry guard, symmetric to the SETTING_STATUS retry above. Same drop
+  // scenario, this time for SET_OPERATION_MODE: chunk silently lost on BLE →
+  // next poll reports the old pulse-side mode → parse_cb_ flips climate::mode
+  // in HA back to that stale value. Remembering the raw byte we requested
+  // (0..5; 255 = unset, e.g. OFF which doesn't go via OPERATION_MODE) lets us
+  // re-issue SET_OPERATION_MODE up to MAX_STATUS_RETRIES times before
+  // accepting the readback as truth.
+  uint8_t last_set_mode_byte_{255};
+  uint8_t mode_retry_count_{0};
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);
