@@ -2,6 +2,7 @@
 
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
+#include <cstring>
 #include <utility>
 
 #ifdef USE_ESP32
@@ -141,6 +142,32 @@ void DaikinMadoka::control(const ClimateCall &call) {
 }
 
 void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
+  // Multi-client guard, GAP variant. Just like gattc_event_handler, GAP
+  // security events are dispatched to every BLEClientNode. Without filtering,
+  // an AUTH_CMPL_EVT from the OTHER BRC1H drives our try_register_notifications_
+  // against the wrong remote — log noise "No control service found at device,
+  // not a Daikin Madoka..?" on dual-pair setups. GAP events don't carry a
+  // gattc_if, so filter by remote_bda taken from whichever sub-struct of
+  // ble_security the event uses.
+  if (this->parent_ == nullptr)
+    return;
+  const uint8_t *event_bda = nullptr;
+  switch (event) {
+    case ESP_GAP_BLE_SEC_REQ_EVT:
+      event_bda = param->ble_security.ble_req.bd_addr;
+      break;
+    case ESP_GAP_BLE_NC_REQ_EVT:
+      event_bda = param->ble_security.ble_req.bd_addr;
+      break;
+    case ESP_GAP_BLE_AUTH_CMPL_EVT:
+      event_bda = param->ble_security.auth_cmpl.bd_addr;
+      break;
+    default:
+      break;
+  }
+  if (event_bda != nullptr && memcmp(event_bda, this->parent_->get_remote_bda(), 6) != 0)
+    return;
+
   switch (event) {
     case ESP_GAP_BLE_SEC_REQ_EVT:
       esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
