@@ -58,6 +58,16 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   uint16_t wwr_handle_;
   SemaphoreHandle_t receive_semaphore_ = nullptr;
   Status cur_status_;
+  // BLE watchdog state. Detects the "connection ESTABLISHED but pulse silent"
+  // failure mode: the BLE stack reports a live link but BRC1H never replies,
+  // so parse_cb_() never runs and current_temperature stays NAN forever (only
+  // a power-cycle recovers). We refresh last_response_ms_ on every successful
+  // parse_cb_(); if it grows stale beyond BLE_WATCHDOG_TIMEOUT_MS while
+  // node_state == ESTABLISHED, update() issues a per-channel disconnect
+  // (the other BRC1H pair on this ESP is left alone). After MAX_WATCHDOG_RESETS
+  // consecutive failures we fall back to App.safe_reboot() as a safety net.
+  uint32_t last_response_ms_{0};
+  uint8_t consecutive_watchdog_resets_{0};
 
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> args);

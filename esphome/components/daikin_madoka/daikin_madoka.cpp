@@ -1,6 +1,7 @@
 #include "daikin_madoka.h"
 
 #include "esphome/core/log.h"
+#include "esphome/core/application.h"
 #include <utility>
 
 #ifdef USE_ESP32
@@ -19,6 +20,16 @@ static const uint16_t CMD_SET_SETPOINT = 0x4040;
 static const uint16_t CMD_GET_FAN_SPEED = 0x0050;
 static const uint16_t CMD_SET_FAN_SPEED = 0x4050;
 static const uint16_t CMD_GET_SENSOR_INFORMATION = 0x0110;
+
+// BLE watchdog parameters. After a Wi-Fi flap (or a stray bluedroid race) we
+// sometimes end up with a live BLE link to BRC1H but no replies — parse_cb_()
+// never runs, current_temperature stays NAN, and HA's commands disappear into
+// the void. If the link is ESTABLISHED but BRC1H has been silent for this
+// long, we issue a per-channel disconnect; after MAX_WATCHDOG_RESETS
+// consecutive failures the component falls back to App.safe_reboot() as a
+// safety net.
+static const uint32_t BLE_WATCHDOG_TIMEOUT_MS = 300000;  // 5 minutes
+static const uint8_t MAX_WATCHDOG_RESETS = 3;
 
 void DaikinMadoka::dump_config() { LOG_CLIMATE(TAG, "Daikin Madoka Climate Controller", this); }
 
@@ -166,6 +177,16 @@ void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_c
 
 void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                        esp_ble_gattc_cb_param_t *param) {
+  // Multi-client guard. Recent ESPHome versions dispatch the same
+  // gattc_event_handler to every BLEClientNode registered against the same
+  // esp32_ble interface, regardless of which BLE connection the callback
+  // actually belongs to. Without this filter a DISCONNECT_EVT from the OTHER
+  // BRC1H wipes our current_temperature/target_temperature to NAN — observed
+  // on dual-pair setups where one pulse stays connected and the other is
+  // in a reconnect loop.
+  if (this->parent_ == nullptr || gattc_if != this->parent_->get_gattc_if())
+    return;
+
   switch (event) {
     case ESP_GATTC_DISCONNECT_EVT: {
       this->node_state = espbt::ClientState::IDLE;  // ??
@@ -189,6 +210,11 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
     }
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
       this->node_state = espbt::ClientState::ESTABLISHED;  // ??
+      // BLE watchdog grace: give the freshly-(re)established link the full
+      // BLE_WATCHDOG_TIMEOUT_MS before the watchdog can kick. Without this
+      // a long disconnect interval would trip the watchdog immediately after
+      // reconnect because last_response_ms_ would still be stale.
+      this->last_response_ms_ = millis();
       break;
     }
     case ESP_GATTC_NOTIFY_EVT: {
@@ -212,6 +238,35 @@ void DaikinMadoka::update() {
   ESP_LOGD(TAG, "Got update request...");
   if (this->node_state != espbt::ClientState::ESTABLISHED) {
     ESP_LOGD(TAG, "...but device is disconnected");
+    return;
+  }
+
+  // BLE watchdog: if the link is ESTABLISHED but the BRC1H hasn't replied
+  // for BLE_WATCHDOG_TIMEOUT_MS, kick the per-channel BLE connection. After
+  // MAX_WATCHDOG_RESETS consecutive failures fall back to App.safe_reboot() —
+  // the other BRC1H pair on this ESP drops too, but only for ~30s while the
+  // ESP comes back up. last_response_ms_ is refreshed in parse_cb_() on
+  // every successful reply and in REG_FOR_NOTIFY_EVT (post-reconnect grace).
+  // Skip the watchdog until we've seen at least one reply ever, so a brand
+  // new flash with an unpaired BRC1H doesn't reboot-loop.
+  if (this->last_response_ms_ > 0 &&
+      (millis() - this->last_response_ms_) > BLE_WATCHDOG_TIMEOUT_MS) {
+    this->consecutive_watchdog_resets_++;
+    ESP_LOGW(TAG, "[%s] BLE watchdog: %lu ms since last reply, reset %u/%u", this->get_name().c_str(),
+             (unsigned long) (millis() - this->last_response_ms_), (unsigned) this->consecutive_watchdog_resets_,
+             (unsigned) MAX_WATCHDOG_RESETS);
+    if (this->consecutive_watchdog_resets_ >= MAX_WATCHDOG_RESETS) {
+      ESP_LOGE(TAG, "[%s] BLE watchdog: %u resets without recovery, rebooting ESP", this->get_name().c_str(),
+               (unsigned) this->consecutive_watchdog_resets_);
+      App.safe_reboot();
+    }
+    if (this->parent_ != nullptr) {
+      this->parent_->disconnect();
+    }
+    // Don't trigger again on the very next update(); give reconnect a full
+    // watchdog window. REG_FOR_NOTIFY refreshes last_response_ms_ on
+    // successful re-establish, parse_cb_() refreshes it on first real reply.
+    this->last_response_ms_ = millis();
     return;
   }
 
@@ -311,6 +366,12 @@ void DaikinMadoka::query_(uint16_t cmd, std::vector<uint8_t> args, int t_d) {
 }
 
 void DaikinMadoka::parse_cb_(std::vector<uint8_t> msg) {
+  // BLE watchdog: a successful parse_cb_() proves the BRC1H is alive and
+  // talking. Refresh last_response_ms_ to defer the next watchdog window and
+  // clear the consecutive-failure counter.
+  this->last_response_ms_ = millis();
+  this->consecutive_watchdog_resets_ = 0;
+
   uint16_t function_id = msg[2] << 8 | msg[3];
   uint8_t i = 4;
   uint8_t message_size = msg.size();
