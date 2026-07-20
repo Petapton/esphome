@@ -7,8 +7,7 @@
 
 #define TEST_WITH_DAC
 
-namespace esphome {
-namespace emon {
+namespace esphome::emon {
 
 static const char *const TAG = "emon";
 
@@ -35,15 +34,15 @@ void Emon::setup() {
   ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &this->adc_handle_));
 
   adc_digi_pattern_config_t adc_pattern[2] = {{
-                                                  .atten = this->v_attenuation_,
-                                                  .channel = this->v_channel_,
-                                                  .unit = this->v_adc_unit_,
+                                                  .atten = static_cast<uint8_t>(this->v_attenuation_),
+                                                  .channel = static_cast<uint8_t>(this->v_channel_),
+                                                  .unit = static_cast<uint8_t>(this->v_adc_unit_),
                                                   .bit_width = ADC_BIT_WIDTH,
                                               },
                                               {
-                                                  .atten = this->i_attenuation_,
-                                                  .channel = this->i_channel_,
-                                                  .unit = this->i_adc_unit_,
+                                                  .atten = static_cast<uint8_t>(this->i_attenuation_),
+                                                  .channel = static_cast<uint8_t>(this->i_channel_),
+                                                  .unit = static_cast<uint8_t>(this->i_adc_unit_),
                                                   .bit_width = ADC_BIT_WIDTH,
                                               }};
 
@@ -203,5 +202,4 @@ void Emon::loop() {
 
 void Emon::dump_config() { LOG_SENSOR("", "Emon", this); }
 
-}  // namespace emon
-}  // namespace esphome
+}  // namespace esphome::emon

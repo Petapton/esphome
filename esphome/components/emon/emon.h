@@ -8,7 +8,7 @@
 #include <esp_adc/adc_cali.h>
 #endif
 
-#define ADC_SAMPLE_RATE_HZ 20 * 1000
+#define ADC_SAMPLE_RATE_HZ (20 * 1000)
 
 #define BUF_LEN (DATA_INTERVAL_MS * ADC_SAMPLE_RATE_HZ / 1000)
 #define READ_LEN (2048 * SOC_ADC_DIGI_DATA_BYTES_PER_CONV)
@@ -27,8 +27,7 @@
 #define ADC_GET_UNIT(p_data) ((p_data)->type2.unit)
 #endif
 
-namespace esphome {
-namespace emon {
+namespace esphome::emon {
 
 struct EmonData {
   float v;
@@ -64,7 +63,9 @@ class Emon : public Component, public sensor::Sensor {
   void set_voltage_sensor(sensor::Sensor *voltage_sensor) { voltage_sensor_ = voltage_sensor; }
   void set_current_sensor(sensor::Sensor *current_sensor) { current_sensor_ = current_sensor; }
   void set_active_power_sensor(sensor::Sensor *active_power_sensor) { active_power_sensor_ = active_power_sensor; }
-  void set_apparent_power_sensor(sensor::Sensor *apparent_power_sensor) { apparent_power_sensor_ = apparent_power_sensor; }
+  void set_apparent_power_sensor(sensor::Sensor *apparent_power_sensor) {
+    apparent_power_sensor_ = apparent_power_sensor;
+  }
   void set_power_factor_sensor(sensor::Sensor *power_factor_sensor) { power_factor_sensor_ = power_factor_sensor; }
 
  protected:
@@ -92,9 +93,6 @@ class Emon : public Component, public sensor::Sensor {
   sensor::Sensor *active_power_sensor_{nullptr};
   sensor::Sensor *apparent_power_sensor_{nullptr};
   sensor::Sensor *power_factor_sensor_{nullptr};
-
-  EmonData calc_vi();
 };
 
-}  // namespace emon
-}  // namespace esphome
+}  // namespace esphome::emon
