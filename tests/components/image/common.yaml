@@ -1,0 +1,105 @@
+image:
+  - platform: file
+    id: binary_image
+    file: ../../pnglogo.png
+    type: BINARY
+    dither: FloydSteinberg
+  - platform: file
+    id: transparent_transparent_image
+    file: ../../pnglogo.png
+    type: BINARY
+    transparency: chroma_key
+
+  - platform: file
+    id: rgba_image
+    file: ../../pnglogo.png
+    type: RGB
+    transparency: alpha_channel
+    resize: 50x50
+  - platform: file
+    id: rgb24_image
+    file: ../../pnglogo.png
+    type: RGB
+    transparency: chroma_key
+  - platform: file
+    id: rgb_image
+    file: ../../pnglogo.png
+    type: RGB
+    transparency: opaque
+
+  - platform: file
+    id: rgb565_image
+    file: ../../pnglogo.png
+    type: RGB565
+    transparency: opaque
+  - platform: file
+    id: rgb565_ck_image
+    file: ../../pnglogo.png
+    type: RGB565
+    transparency: chroma_key
+  - platform: file
+    id: rgb565_alpha_image
+    file: ../../pnglogo.png
+    type: RGB565
+    transparency: alpha_channel
+
+  - platform: file
+    id: grayscale_alpha_image
+    file: ../../pnglogo.png
+    type: grayscale
+    transparency: alpha_channel
+    resize: 50x50
+  - platform: file
+    id: grayscale_ck_image
+    file: ../../pnglogo.png
+    type: grayscale
+    transparency: chroma_key
+  - platform: file
+    id: grayscale_image
+    file: ../../pnglogo.png
+    type: grayscale
+    transparency: opaque
+
+  - platform: file
+    id: web_svg_image
+    file: https://media.esphome.io/logo/logo.svg
+    resize: 256x48
+    type: BINARY
+    transparency: chroma_key
+  - platform: file
+    id: web_tiff_image
+    file: https://media.esphome.io/tests/images/SIPI_Jelly_Beans_4.1.07.tiff
+    type: RGB
+    resize: 48x48
+  - platform: file
+    id: web_redirect_image
+    file: https://media.esphome.io/logo/logo.png
+    type: RGB
+    resize: 48x48
+  - platform: file
+    id: mdi_alert
+    type: BINARY
+    file: mdi:alert-circle-outline
+    resize: 50x50
+  - platform: file
+    id: another_alert_icon
+    file: mdi:alert-outline
+    type: BINARY
+  - platform: file
+    file: mdil:arrange-bring-to-front
+    id: mdil_id
+    resize: 50x50
+    type: binary
+    transparency: chroma_key
+  - platform: file
+    file: mdi:beer
+    id: mdi_id
+    resize: 50x50
+    type: binary
+    transparency: chroma_key
+  - platform: file
+    file: memory:alert-octagon
+    id: memory_id
+    resize: 50x50
+    type: binary
+    transparency: chroma_key

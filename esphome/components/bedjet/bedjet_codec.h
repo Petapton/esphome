@@ -5,8 +5,7 @@
 
 #include "bedjet_const.h"
 
-namespace esphome {
-namespace bedjet {
+namespace esphome::bedjet {
 
 struct BedjetPacket {
   uint8_t data_length;
@@ -90,7 +89,7 @@ struct BedjetStatusPacket {
     int unused_6 : 1;       // 0x4
     bool is_dual_zone : 1;  /// Is part of a Dual Zone configuration
     int unused_7 : 1;       // 0x1
-  } dual_zone_flags;
+  } dual_zone_flags;        // NOLINT(clang-diagnostic-unaligned-access)
 
   uint8_t unused_4 : 8;  // Unknown 23-24 = 0x1310
   uint8_t unused_5 : 8;  // Unknown 23-24 = 0x1310
@@ -183,12 +182,11 @@ class BedjetCodec {
 
   BedjetPacket packet_;
 
-  BedjetStatusPacket *status_packet_;
+  BedjetStatusPacket *status_packet_{nullptr};
   BedjetStatusPacket buf_;
 };
 
 /// Converts a BedJet temp step into degrees Celsius.
 float bedjet_temp_to_c(uint8_t temp);
 
-}  // namespace bedjet
-}  // namespace esphome
+}  // namespace esphome::bedjet

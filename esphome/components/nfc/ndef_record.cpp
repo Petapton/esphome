@@ -1,7 +1,6 @@
 #include "ndef_record.h"
 
-namespace esphome {
-namespace nfc {
+namespace esphome::nfc {
 
 static const char *const TAG = "nfc.ndef_record";
 
@@ -30,13 +29,13 @@ std::vector<uint8_t> NdefRecord::encode(bool first, bool last) {
     data.push_back(payload_length & 0xFF);
   }
 
-  if (this->id_.length()) {
+  if (!this->id_.empty()) {
     data.push_back(this->id_.length());
   }
 
   data.insert(data.end(), this->type_.begin(), this->type_.end());
 
-  if (this->id_.length()) {
+  if (!this->id_.empty()) {
     data.insert(data.end(), this->id_.begin(), this->id_.end());
   }
 
@@ -55,11 +54,10 @@ uint8_t NdefRecord::create_flag_byte(bool first, bool last, size_t payload_size)
   if (payload_size <= 255) {
     value = value | 0x10;  // Set SR bit
   }
-  if (this->id_.length()) {
+  if (!this->id_.empty()) {
     value = value | 0x08;  // Set IL bit
   }
   return value;
 };
 
-}  // namespace nfc
-}  // namespace esphome
+}  // namespace esphome::nfc

@@ -6,8 +6,7 @@
 
 #include <cinttypes>
 
-namespace esphome {
-namespace max31856 {
+namespace esphome::max31856 {
 
 enum MAX31856RegisterMasks { SPI_WRITE_M = 0x80 };
 
@@ -50,7 +49,6 @@ enum MAX31856Registers {
 
 /**
  * Multiple types of thermocouples supported by the chip.
- * Currently only K type implemented here.
  */
 enum MAX31856ThermocoupleType {
   MAX31856_TCTYPE_B = 0b0000,   // 0x00
@@ -70,19 +68,22 @@ enum MAX31856ConfigFilter {
   FILTER_50HZ = 1,
 };
 
-class MAX31856Sensor : public sensor::Sensor,
-                       public PollingComponent,
-                       public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW,
-                                             spi::CLOCK_PHASE_TRAILING, spi::DATA_RATE_4MHZ> {
+class MAX31856Sensor final : public sensor::Sensor,
+                             public PollingComponent,
+                             public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW,
+                                                   spi::CLOCK_PHASE_TRAILING, spi::DATA_RATE_4MHZ> {
  public:
   void setup() override;
   void dump_config() override;
-  float get_setup_priority() const override;
-  void set_filter(MAX31856ConfigFilter filter) { filter_ = filter; }
+  void set_filter(MAX31856ConfigFilter filter) { this->filter_ = filter; }
+  void set_thermocouple_type(MAX31856ThermocoupleType thermocouple_type) {
+    this->thermocouple_type_ = thermocouple_type;
+  }
   void update() override;
 
  protected:
   MAX31856ConfigFilter filter_;
+  MAX31856ThermocoupleType thermocouple_type_;
 
   uint8_t read_register_(uint8_t reg);
   uint32_t read_register24_(uint8_t reg);
@@ -96,5 +97,4 @@ class MAX31856Sensor : public sensor::Sensor,
   void set_noise_filter_();
 };
 
-}  // namespace max31856
-}  // namespace esphome
+}  // namespace esphome::max31856

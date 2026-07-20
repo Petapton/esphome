@@ -1,8 +1,7 @@
 #include "rc_switch_protocol.h"
 #include "esphome/core/log.h"
 
-namespace esphome {
-namespace remote_base {
+namespace esphome::remote_base {
 
 static const char *const TAG = "remote.rc_switch";
 
@@ -54,7 +53,7 @@ void RCSwitchBase::sync(RemoteTransmitData *dst) const {
   }
 }
 void RCSwitchBase::transmit(RemoteTransmitData *dst, uint64_t code, uint8_t len) const {
-  dst->set_carrier_frequency(0);
+  dst->set_carrier_frequency(38000);
   this->sync(dst);
   for (int16_t i = len - 1; i >= 0; i--) {
     if (code & ((uint64_t) 1 << i)) {
@@ -267,5 +266,4 @@ bool RCSwitchDumper::dump(RemoteReceiveData src) {
   return false;
 }
 
-}  // namespace remote_base
-}  // namespace esphome
+}  // namespace esphome::remote_base

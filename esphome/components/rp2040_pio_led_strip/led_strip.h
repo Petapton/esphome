@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_RP2040
+#ifdef USE_RP2
 
 #include "esphome/core/color.h"
 #include "esphome/core/component.h"
@@ -13,10 +13,10 @@
 #include <hardware/pio.h>
 #include <hardware/structs/pio.h>
 #include <pico/stdio.h>
+#include <pico/sem.h>
 #include <map>
 
-namespace esphome {
-namespace rp2040_pio_led_strip {
+namespace esphome::rp2040_pio_led_strip {
 
 enum RGBOrder : uint8_t {
   ORDER_RGB,
@@ -57,7 +57,7 @@ inline const char *rgb_order_to_string(RGBOrder order) {
 
 using init_fn = void (*)(PIO pio, uint sm, uint offset, uint pin, float freq);
 
-class RP2040PIOLEDStripLightOutput : public light::AddressableLight {
+class RP2040PIOLEDStripLightOutput final : public light::AddressableLight {
  public:
   void setup() override;
   void write_state(light::LightState *state) override;
@@ -95,6 +95,8 @@ class RP2040PIOLEDStripLightOutput : public light::AddressableLight {
 
   size_t get_buffer_size_() const { return this->num_leds_ * (3 + this->is_rgbw_); }
 
+  static void dma_write_complete_handler();
+
   uint8_t *buf_{nullptr};
   uint8_t *effect_data_{nullptr};
 
@@ -117,12 +119,13 @@ class RP2040PIOLEDStripLightOutput : public light::AddressableLight {
   init_fn init_;
 
  private:
-  inline static int num_instance_[2];
-  inline static std::map<Chipset, bool> conf_count_;
-  inline static std::map<Chipset, int> chipset_offsets_;
+  inline static int num_instance[2];
+  inline static std::map<Chipset, bool> conf_count;
+  inline static std::map<Chipset, int> chipset_offsets;
+  inline static bool dma_chan_active[12];
+  inline static struct semaphore dma_write_complete_sem[12];
 };
 
-}  // namespace rp2040_pio_led_strip
-}  // namespace esphome
+}  // namespace esphome::rp2040_pio_led_strip
 
-#endif  // USE_RP2040
+#endif  // USE_RP2

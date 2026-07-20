@@ -4,10 +4,9 @@
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/light/light_output.h"
 
-namespace esphome {
-namespace rgbww {
+namespace esphome::rgbww {
 
-class RGBWWLightOutput : public light::LightOutput {
+class RGBWWLightOutput final : public light::LightOutput {
  public:
   void set_red(output::FloatOutput *red) { red_ = red; }
   void set_green(output::FloatOutput *green) { green_ = green; }
@@ -20,10 +19,11 @@ class RGBWWLightOutput : public light::LightOutput {
   void set_color_interlock(bool color_interlock) { color_interlock_ = color_interlock; }
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
-    if (this->color_interlock_)
+    if (this->color_interlock_) {
       traits.set_supported_color_modes({light::ColorMode::RGB, light::ColorMode::COLD_WARM_WHITE});
-    else
+    } else {
       traits.set_supported_color_modes({light::ColorMode::RGB_COLD_WARM_WHITE});
+    }
     traits.set_min_mireds(this->cold_white_temperature_);
     traits.set_max_mireds(this->warm_white_temperature_);
     return traits;
@@ -50,5 +50,4 @@ class RGBWWLightOutput : public light::LightOutput {
   bool color_interlock_{false};
 };
 
-}  // namespace rgbww
-}  // namespace esphome
+}  // namespace esphome::rgbww

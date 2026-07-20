@@ -7,8 +7,7 @@
 using namespace esphome::climate;
 using namespace esphome::uart;
 
-namespace esphome {
-namespace haier {
+namespace esphome::haier {
 
 static const char *const TAG = "haier.climate";
 constexpr size_t SIGNAL_LEVEL_UPDATE_INTERVAL_MS = 10000;
@@ -37,6 +36,7 @@ haier_protocol::HandlerError Smartair2Climate::status_handler_(haier_protocol::F
     } else {
       if (data_size >= sizeof(smartair2_protocol::HaierPacketControl) + 2) {
         memcpy(this->last_status_message_.get(), data + 2, sizeof(smartair2_protocol::HaierPacketControl));
+        this->status_message_callback_.call((const char *) data, data_size);
       } else {
         ESP_LOGW(TAG, "Status packet too small: %d (should be >= %d)", data_size,
                  sizeof(smartair2_protocol::HaierPacketControl));
@@ -105,18 +105,21 @@ void Smartair2Climate::set_handlers() {
   // Set handlers
   this->haier_protocol_.set_answer_handler(
       haier_protocol::FrameType::GET_DEVICE_VERSION,
-      std::bind(&Smartair2Climate::get_device_version_answer_handler_, this, std::placeholders::_1,
-                std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+      [this](haier_protocol::FrameType req, haier_protocol::FrameType msg, const uint8_t *data, size_t size) {
+        return this->get_device_version_answer_handler_(req, msg, data, size);
+      });
   this->haier_protocol_.set_answer_handler(
       haier_protocol::FrameType::CONTROL,
-      std::bind(&Smartair2Climate::status_handler_, this, std::placeholders::_1, std::placeholders::_2,
-                std::placeholders::_3, std::placeholders::_4));
+      [this](haier_protocol::FrameType req, haier_protocol::FrameType msg, const uint8_t *data, size_t size) {
+        return this->status_handler_(req, msg, data, size);
+      });
   this->haier_protocol_.set_answer_handler(
       haier_protocol::FrameType::REPORT_NETWORK_STATUS,
-      std::bind(&Smartair2Climate::report_network_status_answer_handler_, this, std::placeholders::_1,
-                std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+      [this](haier_protocol::FrameType req, haier_protocol::FrameType msg, const uint8_t *data, size_t size) {
+        return this->report_network_status_answer_handler_(req, msg, data, size);
+      });
   this->haier_protocol_.set_default_timeout_handler(
-      std::bind(&Smartair2Climate::messages_timeout_handler_with_cycle_for_init_, this, std::placeholders::_1));
+      [this](haier_protocol::FrameType type) { return this->messages_timeout_handler_with_cycle_for_init_(type); });
 }
 
 void Smartair2Climate::dump_config() {
@@ -187,7 +190,7 @@ void Smartair2Climate::process_phase(std::chrono::steady_clock::time_point now) 
       if (this->action_request_.has_value()) {
         if (this->action_request_.value().message.has_value()) {
           this->send_message_(this->action_request_.value().message.value(), this->use_crc_);
-          this->action_request_.value().message.reset();
+          this->action_request_.value().message.reset();  // NOLINT(bugprone-unchecked-optional-access)
         } else {
           // Message already sent, reseting request and return to idle
           this->action_request_.reset();
@@ -206,8 +209,9 @@ void Smartair2Climate::process_phase(std::chrono::steady_clock::time_point now) 
 #ifdef USE_WIFI
       else if (this->send_wifi_signal_ &&
                (std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_signal_request_).count() >
-                SIGNAL_LEVEL_UPDATE_INTERVAL_MS))
+                SIGNAL_LEVEL_UPDATE_INTERVAL_MS)) {
         this->set_phase(ProtocolPhases::SENDING_UPDATE_SIGNAL_REQUEST);
+      }
 #endif
     } break;
     default:
@@ -337,7 +341,7 @@ haier_protocol::HaierMessage Smartair2Climate::get_control_message() {
     if (climate_control.target_temperature.has_value()) {
       float target_temp = climate_control.target_temperature.value();
       out_data->set_point = ((int) target_temp) - 16;  // set the temperature with offset 16
-      out_data->half_degree = (target_temp - ((int) target_temp) >= 0.49) ? 1 : 0;
+      out_data->half_degree = (target_temp - ((int) target_temp) >= 0.49f) ? 1 : 0;
     }
     if (out_data->ac_power == 0) {
       // If AC is off - no presets allowed
@@ -375,14 +379,16 @@ haier_protocol::HaierMessage Smartair2Climate::get_control_message() {
       }
     }
   }
-  out_data->display_status = this->display_status_ ? 0 : 1;
-  out_data->health_mode = this->health_mode_ ? 1 : 0;
+  out_data->display_status = this->get_display_state() ? 0 : 1;
+  this->display_status_ = (SwitchState) ((uint8_t) this->display_status_ & 0b01);
+  out_data->health_mode = this->get_health_mode() ? 1 : 0;
+  this->health_mode_ = (SwitchState) ((uint8_t) this->health_mode_ & 0b01);
   return haier_protocol::HaierMessage(haier_protocol::FrameType::CONTROL, 0x4D5F, control_out_buffer,
                                       sizeof(smartair2_protocol::HaierPacketControl));
 }
 
 haier_protocol::HandlerError Smartair2Climate::process_status_message_(const uint8_t *packet_buffer, uint8_t size) {
-  if (size < sizeof(smartair2_protocol::HaierStatus))
+  if (size != sizeof(smartair2_protocol::HaierStatus))
     return haier_protocol::HandlerError::WRONG_MESSAGE_STRUCTURE;
   smartair2_protocol::HaierStatus packet;
   memcpy(&packet, packet_buffer, size);
@@ -399,7 +405,8 @@ haier_protocol::HandlerError Smartair2Climate::process_status_message_(const uin
     } else {
       this->preset = CLIMATE_PRESET_NONE;
     }
-    should_publish = should_publish || (!old_preset.has_value()) || (old_preset.value() != this->preset.value());
+    should_publish = should_publish || (!old_preset.has_value()) ||
+                     (old_preset.value_or(CLIMATE_PRESET_NONE) != this->preset.value_or(CLIMATE_PRESET_NONE));
   }
   {
     // Target temperature
@@ -443,30 +450,29 @@ haier_protocol::HandlerError Smartair2Climate::process_status_message_(const uin
         this->fan_mode = CLIMATE_FAN_HIGH;
         break;
     }
-    should_publish = should_publish || (!old_fan_mode.has_value()) || (old_fan_mode.value() != fan_mode.value());
+    should_publish = should_publish || (!old_fan_mode.has_value()) ||
+                     (old_fan_mode.value_or(CLIMATE_FAN_ON) != this->fan_mode.value_or(CLIMATE_FAN_ON));
   }
-  {
-    // Display status
-    // should be before "Climate mode" because it is changing this->mode
-    if (packet.control.ac_power != 0) {
-      // if AC is off display status always ON so process it only when AC is on
-      bool disp_status = packet.control.display_status == 0;
-      if (disp_status != this->display_status_) {
-        // Do something only if display status changed
-        if (this->mode == CLIMATE_MODE_OFF) {
-          // AC just turned on from remote need to turn off display
-          this->force_send_control_ = true;
-        } else {
-          this->display_status_ = disp_status;
-        }
+  // Display status
+  // should be before "Climate mode" because it is changing this->mode
+  if (packet.control.ac_power != 0) {
+    // if AC is off display status always ON so process it only when AC is on
+    bool disp_status = packet.control.display_status == 0;
+    if (disp_status != this->get_display_state()) {
+      // Do something only if display status changed
+      if (this->mode == CLIMATE_MODE_OFF) {
+        // AC just turned on from remote need to turn off display
+        this->force_send_control_ = true;
+      } else if ((((uint8_t) this->health_mode_) & 0b10) == 0) {
+        this->display_status_ = disp_status ? SwitchState::SWITCH_ON : SwitchState::SWITCH_OFF;
       }
     }
   }
-  {
-    // Health mode
-    bool old_health_mode = this->health_mode_;
-    this->health_mode_ = packet.control.health_mode == 1;
-    should_publish = should_publish || (old_health_mode != this->health_mode_);
+  // Health mode
+  if ((((uint8_t) this->health_mode_) & 0b10) == 0) {
+    bool old_health_mode = this->get_health_mode();
+    this->health_mode_ = packet.control.health_mode == 1 ? SwitchState::SWITCH_ON : SwitchState::SWITCH_OFF;
+    should_publish = should_publish || (old_health_mode != this->get_health_mode());
   }
   {
     // Climate mode
@@ -548,5 +554,4 @@ void Smartair2Climate::set_alternative_swing_control(bool swing_control) {
   this->use_alternative_swing_control_ = swing_control;
 }
 
-}  // namespace haier
-}  // namespace esphome
+}  // namespace esphome::haier

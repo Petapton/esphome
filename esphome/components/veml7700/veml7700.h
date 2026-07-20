@@ -3,10 +3,8 @@
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/core/component.h"
-#include "esphome/core/optional.h"
 
-namespace esphome {
-namespace veml7700 {
+namespace esphome::veml7700 {
 
 using esphome::i2c::ErrorCode;
 
@@ -24,7 +22,7 @@ enum class CommandRegisters : uint8_t {
   ALS_INT = 0x06      // R: ALS INT trigger event
 };
 
-enum Gain : uint8_t {
+enum Gain : uint16_t {
   X_1 = 0,
   X_2 = 1,
   X_1_8 = 2,
@@ -32,7 +30,7 @@ enum Gain : uint8_t {
 };
 const uint8_t GAINS_COUNT = 4;
 
-enum IntegrationTime : uint8_t {
+enum IntegrationTime : uint16_t {
   INTEGRATION_TIME_25MS = 0b1100,
   INTEGRATION_TIME_50MS = 0b1000,
   INTEGRATION_TIME_100MS = 0b0000,
@@ -42,14 +40,14 @@ enum IntegrationTime : uint8_t {
 };
 const uint8_t INTEGRATION_TIMES_COUNT = 6;
 
-enum Persistence : uint8_t {
+enum Persistence : uint16_t {
   PERSISTENCE_1 = 0,
   PERSISTENCE_2 = 1,
   PERSISTENCE_4 = 2,
   PERSISTENCE_8 = 3,
 };
 
-enum PSM : uint8_t {
+enum PSMMode : uint16_t {
   PSM_MODE_1 = 0,
   PSM_MODE_2 = 1,
   PSM_MODE_3 = 2,
@@ -92,17 +90,16 @@ union PSMRegister {
   uint8_t raw_bytes[2];
   struct {
     bool PSM_EN : 1;
-    uint8_t PSM : 2;
+    PSMMode PSM : 2;
     uint16_t reserved : 13;
   } __attribute__((packed));
 };
 
-class VEML7700Component : public PollingComponent, public i2c::I2CDevice {
+class VEML7700Component final : public PollingComponent, public i2c::I2CDevice {
  public:
   //
   // EspHome framework functions
   //
-  float get_setup_priority() const override { return setup_priority::DATA; }
   void setup() override;
   void dump_config() override;
   void update() override;
@@ -198,5 +195,4 @@ class VEML7700Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor *actual_integration_time_sensor_{nullptr};  // Actual integration time for the measurement
 };
 
-}  // namespace veml7700
-}  // namespace esphome
+}  // namespace esphome::veml7700

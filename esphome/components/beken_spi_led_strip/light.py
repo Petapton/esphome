@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
-import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome import pins
+import esphome.codegen as cg
 from esphome.components import libretiny, light
+import esphome.config_validation as cv
 from esphome.const import (
     CONF_CHIPSET,
     CONF_IS_RGBW,
@@ -62,6 +62,7 @@ CONF_IS_WRGB = "is_wrgb"
 SUPPORTED_PINS = {
     libretiny.const.FAMILY_BK7231N: [16],
     libretiny.const.FAMILY_BK7231T: [16],
+    libretiny.const.FAMILY_BK7238: [16],
     libretiny.const.FAMILY_BK7251: [16],
 }
 

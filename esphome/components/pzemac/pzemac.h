@@ -7,12 +7,11 @@
 
 #include <vector>
 
-namespace esphome {
-namespace pzemac {
+namespace esphome::pzemac {
 
 template<typename... Ts> class ResetEnergyAction;
 
-class PZEMAC : public PollingComponent, public modbus::ModbusDevice {
+class PZEMAC final : public PollingComponent, public modbus::ModbusClientDevice {
  public:
   void set_voltage_sensor(sensor::Sensor *voltage_sensor) { voltage_sensor_ = voltage_sensor; }
   void set_current_sensor(sensor::Sensor *current_sensor) { current_sensor_ = current_sensor; }
@@ -39,15 +38,14 @@ class PZEMAC : public PollingComponent, public modbus::ModbusDevice {
   void reset_energy_();
 };
 
-template<typename... Ts> class ResetEnergyAction : public Action<Ts...> {
+template<typename... Ts> class ResetEnergyAction final : public Action<Ts...> {
  public:
   ResetEnergyAction(PZEMAC *pzemac) : pzemac_(pzemac) {}
 
-  void play(Ts... x) override { this->pzemac_->reset_energy_(); }
+  void play(const Ts &...x) override { this->pzemac_->reset_energy_(); }
 
  protected:
   PZEMAC *pzemac_;
 };
 
-}  // namespace pzemac
-}  // namespace esphome
+}  // namespace esphome::pzemac

@@ -2,32 +2,20 @@
 
 #ifdef USE_ESP32
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/stream_buffer.h>
-
-#include <cinttypes>
-#include <memory>
+// Deprecated: include "esphome/components/ring_buffer/ring_buffer.h" and use
+// esphome::ring_buffer::RingBuffer. This shim will be removed in 2026.11.0.
+#if __has_include("esphome/components/ring_buffer/ring_buffer.h")
+#include "esphome/components/ring_buffer/ring_buffer.h"
+#else
+#error \
+    "esphome/components/ring_buffer/ring_buffer.h not found. Add 'ring_buffer' to your component's AUTO_LOAD list to use esphome::ring_buffer::RingBuffer."
+#endif
+#include "esphome/core/helpers.h"  // for ESPDEPRECATED
 
 namespace esphome {
 
-class RingBuffer {
- public:
-  size_t read(void *data, size_t len, TickType_t ticks_to_wait = 0);
-
-  size_t write(void *data, size_t len);
-
-  size_t available() const;
-  size_t free() const;
-
-  BaseType_t reset();
-
-  static std::unique_ptr<RingBuffer> create(size_t len);
-
- protected:
-  StreamBufferHandle_t handle_;
-  StaticStreamBuffer_t structure_;
-  uint8_t *storage_;
-};
+using RingBuffer ESPDEPRECATED("Use esphome::ring_buffer::RingBuffer instead. Removed in 2026.11.0.",
+                               "2026.5.0") = ring_buffer::RingBuffer;
 
 }  // namespace esphome
 

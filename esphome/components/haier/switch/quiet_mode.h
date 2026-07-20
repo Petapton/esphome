@@ -1,0 +1,16 @@
+#pragma once
+
+#include "esphome/components/switch/switch.h"
+#include "../hon_climate.h"
+
+namespace esphome::haier {
+
+class QuietModeSwitch final : public switch_::Switch, public Parented<HonClimate> {
+ public:
+  QuietModeSwitch() = default;
+
+ protected:
+  void write_state(bool state) override;
+};
+
+}  // namespace esphome::haier

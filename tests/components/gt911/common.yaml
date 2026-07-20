@@ -1,0 +1,12 @@
+touchscreen:
+  - platform: gt911
+    i2c_id: i2c_bus
+    id: gt911_touchscreen
+    display: test_display_screen
+    interrupt_pin: ${interrupt_pin}
+    reset_pin: ${reset_pin}
+
+binary_sensor:
+  - platform: gt911
+    id: touch_key_911
+    index: 0

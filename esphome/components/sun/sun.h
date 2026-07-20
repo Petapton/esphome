@@ -7,8 +7,7 @@
 
 #include "esphome/components/time/real_time_clock.h"
 
-namespace esphome {
-namespace sun {
+namespace esphome::sun {
 
 namespace internal {
 
@@ -52,12 +51,15 @@ struct HorizontalCoordinate {
 
 }  // namespace internal
 
-class Sun {
+class Sun final {
  public:
   void set_time(time::RealTimeClock *time) { time_ = time; }
   time::RealTimeClock *get_time() const { return time_; }
   void set_latitude(double latitude) { location_.latitude = latitude; }
   void set_longitude(double longitude) { location_.longitude = longitude; }
+
+  // Check if the sun is above the horizon, with a default elevation angle of -0.83333 (standard for sunrise/set).
+  bool is_above_horizon(double elevation = -0.83333) { return this->elevation() > elevation; }
 
   optional<ESPTime> sunrise(double elevation);
   optional<ESPTime> sunset(double elevation);
@@ -76,7 +78,7 @@ class Sun {
   internal::GeoLocation location_;
 };
 
-class SunTrigger : public Trigger<>, public PollingComponent, public Parented<Sun> {
+class SunTrigger final : public Trigger<>, public PollingComponent, public Parented<Sun> {
  public:
   SunTrigger() : PollingComponent(60000) {}
 
@@ -107,12 +109,12 @@ class SunTrigger : public Trigger<>, public PollingComponent, public Parented<Su
   double elevation_;
 };
 
-template<typename... Ts> class SunCondition : public Condition<Ts...>, public Parented<Sun> {
+template<typename... Ts> class SunCondition final : public Condition<Ts...>, public Parented<Sun> {
  public:
   TEMPLATABLE_VALUE(double, elevation);
   void set_above(bool above) { above_ = above; }
 
-  bool check(Ts... x) override {
+  bool check(const Ts &...x) override {
     double elevation = this->elevation_.value(x...);
     double current = this->parent_->elevation();
     if (this->above_) {
@@ -126,5 +128,4 @@ template<typename... Ts> class SunCondition : public Condition<Ts...>, public Pa
   bool above_;
 };
 
-}  // namespace sun
-}  // namespace esphome
+}  // namespace esphome::sun

@@ -1,7 +1,7 @@
-import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome import automation
+import esphome.codegen as cg
 from esphome.components import uart
+import esphome.config_validation as cv
 from esphome.const import CONF_ID, CONF_ON_TAG, CONF_TRIGGER_ID
 
 DEPENDENCIES = ["uart"]
@@ -27,6 +27,10 @@ CONFIG_SCHEMA = (
     )
     .extend(cv.COMPONENT_SCHEMA)
     .extend(uart.UART_DEVICE_SCHEMA)
+)
+
+FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(
+    "rdm6300", baud_rate=9600, require_rx=True
 )
 
 

@@ -1,12 +1,11 @@
 #include "ina2xx_base.h"
-#include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 #include <cinttypes>
 #include <cmath>
 
-namespace esphome {
-namespace ina2xx_base {
+namespace esphome::ina2xx_base {
 
 static const char *const TAG = "ina2xx";
 
@@ -50,8 +49,6 @@ static bool check_model_and_device_match(INAModel model, uint16_t dev_id) {
 }
 
 void INA2XX::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up INA2xx...");
-
   if (!this->reset_config_()) {
     ESP_LOGE(TAG, "Reset failed, check connection");
     this->mark_failed();
@@ -80,8 +77,6 @@ void INA2XX::setup() {
 
   this->state_ = State::IDLE;
 }
-
-float INA2XX::get_setup_priority() const { return setup_priority::DATA; }
 
 void INA2XX::update() {
   ESP_LOGD(TAG, "Updating");
@@ -203,15 +198,19 @@ void INA2XX::dump_config() {
              this->dev_id_);
   }
   if (this->is_failed()) {
-    ESP_LOGE(TAG, "Communication with INA2xx failed!");
+    ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
   }
   LOG_UPDATE_INTERVAL(this);
-  ESP_LOGCONFIG(TAG, "  Shunt resistance = %f Ohm", this->shunt_resistance_ohm_);
-  ESP_LOGCONFIG(TAG, "  Max current = %f A", this->max_current_a_);
-  ESP_LOGCONFIG(TAG, "  Shunt temp coeff = %d ppm/°C", this->shunt_tempco_ppm_c_);
-  ESP_LOGCONFIG(TAG, "  ADCRANGE = %d (%s)", (uint8_t) this->adc_range_, this->adc_range_ ? "±40.96 mV" : "±163.84 mV");
-  ESP_LOGCONFIG(TAG, "  CURRENT_LSB = %f", this->current_lsb_);
-  ESP_LOGCONFIG(TAG, "  SHUNT_CAL = %d", this->shunt_cal_);
+  ESP_LOGCONFIG(TAG,
+                "  Shunt resistance = %f Ohm\n"
+                "  Max current = %f A\n"
+                "  Shunt temp coeff = %d ppm/°C\n"
+                "  ADCRANGE = %d (%s)\n"
+                "  CURRENT_LSB = %f\n"
+                "  SHUNT_CAL = %d",
+                this->shunt_resistance_ohm_, this->max_current_a_, this->shunt_tempco_ppm_c_,
+                (uint8_t) this->adc_range_, this->adc_range_ ? "±40.96 mV" : "±163.84 mV", this->current_lsb_,
+                this->shunt_cal_);
 
   ESP_LOGCONFIG(TAG, "  ADC Samples = %d; ADC times: Bus = %d μs, Shunt = %d μs, Temp = %d μs",
                 ADC_SAMPLES[0b111 & (uint8_t) this->adc_avg_samples_],
@@ -255,7 +254,12 @@ bool INA2XX::reset_energy_counters() {
 bool INA2XX::reset_config_() {
   ESP_LOGV(TAG, "Reset");
   ConfigurationRegister cfg{0};
-  cfg.RST = true;
+  if (!this->reset_on_boot_) {
+    ESP_LOGI(TAG, "Skipping on-boot device reset");
+    cfg.RST = false;
+  } else {
+    cfg.RST = true;
+  }
   return this->write_unsigned_16_(RegisterMap::REG_CONFIG, cfg.raw_u16);
 }
 
@@ -357,8 +361,8 @@ bool INA2XX::configure_shunt_() {
     ESP_LOGW(TAG, "Shunt value too high");
   }
   this->shunt_cal_ &= 0x7FFF;
-  ESP_LOGV(TAG, "Given Rshunt=%f Ohm and Max_current=%.3f", this->shunt_resistance_ohm_, this->max_current_a_);
-  ESP_LOGV(TAG, "New CURRENT_LSB=%f, SHUNT_CAL=%u", this->current_lsb_, this->shunt_cal_);
+  ESP_LOGV(TAG, "Rshunt=%f Ohm, max current=%.3f A, current LSB=%f, shunt cal=%u", this->shunt_resistance_ohm_,
+           this->max_current_a_, this->current_lsb_, this->shunt_cal_);
   return this->write_unsigned_16_(RegisterMap::REG_SHUNT_CAL, this->shunt_cal_);
 }
 
@@ -483,7 +487,7 @@ bool INA2XX::read_power_w_(float &power_out) {
   uint64_t power_reading{0};
   auto ret = this->read_unsigned_((uint8_t) RegisterMap::REG_POWER, 3, power_reading);
 
-  ESP_LOGV(TAG, "read_power_w_ ret=%s, reading_lsb=%d", OKFAILED(ret), (uint32_t) power_reading);
+  ESP_LOGV(TAG, "read_power_w_ ret=%s, reading_lsb=%" PRIu32, OKFAILED(ret), (uint32_t) power_reading);
   if (ret) {
     power_out = this->cfg_.power_coeff * this->current_lsb_ * (float) power_reading;
   }
@@ -503,8 +507,8 @@ bool INA2XX::read_energy_(double &joules_out, double &watt_hours_out) {
   uint64_t previous_energy = this->energy_overflows_count_ * (((uint64_t) 1) << 40);
   auto ret = this->read_unsigned_((uint8_t) RegisterMap::REG_ENERGY, 5, joules_reading);
 
-  ESP_LOGV(TAG, "read_energy_j_ ret=%s, reading_lsb=0x%" PRIX64 ", current_lsb=%f, overflow_cnt=%d", OKFAILED(ret),
-           joules_reading, this->current_lsb_, this->energy_overflows_count_);
+  ESP_LOGV(TAG, "read_energy_j_ ret=%s, reading_lsb=0x%" PRIX64 ", current_lsb=%f, overflow_cnt=%" PRIu32,
+           OKFAILED(ret), joules_reading, this->current_lsb_, this->energy_overflows_count_);
   if (ret) {
     joules_out = this->cfg_.energy_coeff * this->current_lsb_ * (double) joules_reading + (double) previous_energy;
     watt_hours_out = joules_out / 3600.0;
@@ -528,7 +532,7 @@ bool INA2XX::read_charge_(double &coulombs_out, double &amp_hours_out) {
   auto ret = this->read_unsigned_((uint8_t) RegisterMap::REG_CHARGE, 5, raw);
   coulombs_reading = this->two_complement_(raw, 40);
 
-  ESP_LOGV(TAG, "read_charge_c_ ret=%d, curr_charge=%f + 39-bit overflow_cnt=%d", ret, coulombs_reading,
+  ESP_LOGV(TAG, "read_charge_c_ ret=%d, curr_charge=%f + 39-bit overflow_cnt=%" PRIu32, ret, coulombs_reading,
            this->charge_overflows_count_);
   if (ret) {
     coulombs_out = this->current_lsb_ * (double) coulombs_reading + (double) previous_charge;
@@ -567,9 +571,8 @@ bool INA2XX::write_unsigned_16_(uint8_t reg, uint16_t val) {
 }
 
 bool INA2XX::read_unsigned_(uint8_t reg, uint8_t reg_size, uint64_t &data_out) {
-  static uint8_t rx_buf[5] = {0};  // max buffer size
-
-  if (reg_size > 5) {
+  uint8_t rx_buf[5]{};
+  if (reg_size > sizeof(rx_buf)) {
     return false;
   }
 
@@ -594,11 +597,6 @@ bool INA2XX::read_unsigned_16_(uint8_t reg, uint16_t &out) {
 }
 
 int64_t INA2XX::two_complement_(uint64_t value, uint8_t bits) {
-  if (value > (1ULL << (bits - 1))) {
-    return (int64_t) (value - (1ULL << bits));
-  } else {
-    return (int64_t) value;
-  }
+  return (int64_t) (value << (64 - bits)) >> (64 - bits);
 }
-}  // namespace ina2xx_base
-}  // namespace esphome
+}  // namespace esphome::ina2xx_base

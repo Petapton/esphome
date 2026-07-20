@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
 from esphome import pins
-from esphome.components import light, rp2040
+import esphome.codegen as cg
+from esphome.components import light, rp2
+import esphome.config_validation as cv
 from esphome.const import (
     CONF_CHIPSET,
     CONF_ID,
@@ -11,10 +13,6 @@ from esphome.const import (
     CONF_PIN,
     CONF_RGB_ORDER,
 )
-
-import esphome.codegen as cg
-import esphome.config_validation as cv
-
 from esphome.util import _LOGGER
 
 
@@ -127,15 +125,14 @@ writezero:
 
 def time_to_cycles(time_us):
     cycles_per_us = 57.5
-    cycles = round(float(time_us) * cycles_per_us)
-    return cycles
+    return round(float(time_us) * cycles_per_us)
 
 
 CONF_PIO = "pio"
 
-AUTO_LOAD = ["rp2040_pio"]
+AUTO_LOAD = ["rp2_pio"]
 CODEOWNERS = ["@Papa-DMan"]
-DEPENDENCIES = ["rp2040"]
+DEPENDENCIES = ["rp2"]
 
 rp2040_pio_led_strip_ns = cg.esphome_ns.namespace("rp2040_pio_led_strip")
 RP2040PIOLEDStripLightOutput = rp2040_pio_led_strip_ns.class_(
@@ -151,7 +148,6 @@ CHIPSETS = {
     "WS2812B": Chipset.CHIPSET_WS2812B,
     "SK6812": Chipset.CHIPSET_SK6812,
     "SM16703": Chipset.CHIPSET_SM16703,
-    "CUSTOM": Chipset.CHIPSET_CUSTOM,
 }
 
 
@@ -175,7 +171,7 @@ RGB_ORDERS = {
 CHIPSET_TIMINGS = {
     "WS2812": LEDStripTimings(20, 40, 46, 34),
     "WS2812B": LEDStripTimings(23, 49, 46, 26),
-    "SK6812": LEDStripTimings(17, 52, 34, 34),
+    "SK6812": LEDStripTimings(20, 54, 38, 38),
     "SM16703": LEDStripTimings(17, 52, 52, 17),
 }
 
@@ -254,7 +250,7 @@ async def to_code(config):
     if chipset := config.get(CONF_CHIPSET):
         cg.add(var.set_chipset(chipset))
         _LOGGER.info("Generating PIO assembly code")
-        rp2040.add_pio_file(
+        rp2.add_pio_file(
             __name__,
             key,
             generate_assembly_code(
@@ -269,7 +265,7 @@ async def to_code(config):
     else:
         cg.add(var.set_chipset(Chipset.CHIPSET_CUSTOM))
         _LOGGER.info("Generating custom PIO assembly code")
-        rp2040.add_pio_file(
+        rp2.add_pio_file(
             __name__,
             key,
             generate_assembly_code(

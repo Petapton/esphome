@@ -5,10 +5,9 @@
 #include "esphome/components/output/float_output.h"
 #include "esphome/core/component.h"
 
-namespace esphome {
-namespace rgbct {
+namespace esphome::rgbct {
 
-class RGBCTLightOutput : public light::LightOutput {
+class RGBCTLightOutput final : public light::LightOutput {
  public:
   void set_red(output::FloatOutput *red) { red_ = red; }
   void set_green(output::FloatOutput *green) { green_ = green; }
@@ -23,10 +22,11 @@ class RGBCTLightOutput : public light::LightOutput {
 
   light::LightTraits get_traits() override {
     auto traits = light::LightTraits();
-    if (this->color_interlock_)
+    if (this->color_interlock_) {
       traits.set_supported_color_modes({light::ColorMode::RGB, light::ColorMode::COLOR_TEMPERATURE});
-    else
+    } else {
       traits.set_supported_color_modes({light::ColorMode::RGB_COLOR_TEMPERATURE, light::ColorMode::COLOR_TEMPERATURE});
+    }
     traits.set_min_mireds(this->cold_white_temperature_);
     traits.set_max_mireds(this->warm_white_temperature_);
     return traits;
@@ -54,5 +54,4 @@ class RGBCTLightOutput : public light::LightOutput {
   bool color_interlock_{true};
 };
 
-}  // namespace rgbct
-}  // namespace esphome
+}  // namespace esphome::rgbct
