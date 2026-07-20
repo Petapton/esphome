@@ -41,7 +41,6 @@ struct EmonData {
 class Emon : public Component, public sensor::Sensor {
  public:
   float get_setup_priority() const override { return esphome::setup_priority::LATE; }
-  float get_loop_priority() const override { return 10.0f; }
 
   void setup() override;
   void loop() override;
