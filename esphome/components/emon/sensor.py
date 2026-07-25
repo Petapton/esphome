@@ -1,182 +1,107 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
-import esphome.final_validate as fv
-from esphome.core import CORE, TimePeriod
 from esphome.components import sensor
-from esphome.components.esp32 import get_esp32_variant
-from esphome.const import (
-    CONF_ATTENUATION,
-    CONF_ID,
-    CONF_NUMBER,
-    CONF_PIN,
-    CONF_WIFI,
-    CONF_VOLTAGE,
-    CONF_CURRENT,
-    CONF_ACTIVE_POWER,
-    CONF_APPARENT_POWER,
-    CONF_POWER_FACTOR,
-    DEVICE_CLASS_VOLTAGE,
-    DEVICE_CLASS_CURRENT,
-    DEVICE_CLASS_POWER,
-    DEVICE_CLASS_APPARENT_POWER,
-    DEVICE_CLASS_POWER_FACTOR,
-    STATE_CLASS_MEASUREMENT,
-    UNIT_VOLT,
-    UNIT_AMPERE,
-    UNIT_WATT,
-    UNIT_VOLT_AMPS,
-)
 from esphome.components.adc import (
+    ATTENUATION_MODES,
+    ESP32_VARIANT_ADC1_PIN_TO_CHANNEL,
+    ESP32_VARIANT_ADC2_PIN_TO_CHANNEL,
+    adc_unit_t,
     validate_adc_pin,
 )
+from esphome.components.esp32 import get_esp32_variant
 from esphome.components.esp32.const import (
     VARIANT_ESP32,
     VARIANT_ESP32C2,
     VARIANT_ESP32C3,
+    VARIANT_ESP32C5,
     VARIANT_ESP32C6,
+    VARIANT_ESP32C61,
     VARIANT_ESP32H2,
+    VARIANT_ESP32P4,
     VARIANT_ESP32S2,
     VARIANT_ESP32S3,
 )
+import esphome.config_validation as cv
+from esphome.const import (
+    CONF_ACTIVE_POWER,
+    CONF_APPARENT_POWER,
+    CONF_ATTENUATION,
+    CONF_CURRENT,
+    CONF_ID,
+    CONF_NUMBER,
+    CONF_PIN,
+    CONF_POWER_FACTOR,
+    CONF_VOLTAGE,
+    DEVICE_CLASS_APPARENT_POWER,
+    DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_POWER,
+    DEVICE_CLASS_POWER_FACTOR,
+    DEVICE_CLASS_VOLTAGE,
+    STATE_CLASS_MEASUREMENT,
+    UNIT_AMPERE,
+    UNIT_VOLT,
+    UNIT_VOLT_AMPS,
+    UNIT_WATT,
+)
+from esphome.core import TimePeriod
 
-adc_unit_t = cg.global_ns.enum("adc_unit_t")
-
-adc_channel_t = cg.global_ns.enum("adc_channel_t")
-
-# From https://github.com/espressif/esp-idf/blob/master/components/driver/include/driver/adc_common.h
-# pin to adc1 channel mapping
-ESP32_VARIANT_ADC1_PIN_TO_CHANNEL = {
-    VARIANT_ESP32: {
-        36: adc_channel_t.ADC_CHANNEL_0,
-        37: adc_channel_t.ADC_CHANNEL_1,
-        38: adc_channel_t.ADC_CHANNEL_2,
-        39: adc_channel_t.ADC_CHANNEL_3,
-        32: adc_channel_t.ADC_CHANNEL_4,
-        33: adc_channel_t.ADC_CHANNEL_5,
-        34: adc_channel_t.ADC_CHANNEL_6,
-        35: adc_channel_t.ADC_CHANNEL_7,
-    },
-    VARIANT_ESP32S2: {
-        1: adc_channel_t.ADC_CHANNEL_0,
-        2: adc_channel_t.ADC_CHANNEL_1,
-        3: adc_channel_t.ADC_CHANNEL_2,
-        4: adc_channel_t.ADC_CHANNEL_3,
-        5: adc_channel_t.ADC_CHANNEL_4,
-        6: adc_channel_t.ADC_CHANNEL_5,
-        7: adc_channel_t.ADC_CHANNEL_6,
-        8: adc_channel_t.ADC_CHANNEL_7,
-        9: adc_channel_t.ADC_CHANNEL_8,
-        10: adc_channel_t.ADC_CHANNEL_9,
-    },
-    VARIANT_ESP32S3: {
-        1: adc_channel_t.ADC_CHANNEL_0,
-        2: adc_channel_t.ADC_CHANNEL_1,
-        3: adc_channel_t.ADC_CHANNEL_2,
-        4: adc_channel_t.ADC_CHANNEL_3,
-        5: adc_channel_t.ADC_CHANNEL_4,
-        6: adc_channel_t.ADC_CHANNEL_5,
-        7: adc_channel_t.ADC_CHANNEL_6,
-        8: adc_channel_t.ADC_CHANNEL_7,
-        9: adc_channel_t.ADC_CHANNEL_8,
-        10: adc_channel_t.ADC_CHANNEL_9,
-    },
-    VARIANT_ESP32C3: {
-        0: adc_channel_t.ADC_CHANNEL_0,
-        1: adc_channel_t.ADC_CHANNEL_1,
-        2: adc_channel_t.ADC_CHANNEL_2,
-        3: adc_channel_t.ADC_CHANNEL_3,
-        4: adc_channel_t.ADC_CHANNEL_4,
-    },
-    VARIANT_ESP32C2: {
-        0: adc_channel_t.ADC_CHANNEL_0,
-        1: adc_channel_t.ADC_CHANNEL_1,
-        2: adc_channel_t.ADC_CHANNEL_2,
-        3: adc_channel_t.ADC_CHANNEL_3,
-        4: adc_channel_t.ADC_CHANNEL_4,
-    },
-    VARIANT_ESP32C6: {
-        0: adc_channel_t.ADC_CHANNEL_0,
-        1: adc_channel_t.ADC_CHANNEL_1,
-        2: adc_channel_t.ADC_CHANNEL_2,
-        3: adc_channel_t.ADC_CHANNEL_3,
-        4: adc_channel_t.ADC_CHANNEL_4,
-        5: adc_channel_t.ADC_CHANNEL_5,
-        6: adc_channel_t.ADC_CHANNEL_6,
-    },
-    VARIANT_ESP32H2: {
-        0: adc_channel_t.ADC_CHANNEL_0,
-        1: adc_channel_t.ADC_CHANNEL_1,
-        2: adc_channel_t.ADC_CHANNEL_2,
-        3: adc_channel_t.ADC_CHANNEL_3,
-        4: adc_channel_t.ADC_CHANNEL_4,
-    },
+# ADC2 continuous (DMA) mode support per variant.
+# True = supported, False = not supported.
+# Source: ADC_LL_DIG_SUPPORTED_UNIT in esp-idf/components/esp_hal_ana_conv/{chip}/include/hal/adc_ll.h
+# Unknown variants default to False (safe: ADC1-only).
+_ADC2_CONTINUOUS_STATUS = {
+    VARIANT_ESP32: False,  # HAL forces ADC_LL_DIGI_CONV_ONLY_ADC1 regardless of conv_mode
+    VARIANT_ESP32S2: True,  # ADC_LL_DIG_SUPPORTED_UNIT(UNIT) = 1 for both units
+    VARIANT_ESP32S3: False,  # hardware errata; driver rejects ADC2 unless CONFIG_ADC_CONTINUOUS_FORCE_USE_ADC2_ON_C3_S3
+    VARIANT_ESP32C2: False,  # SOC_ADC_PERIPH_NUM=1, no ADC2 hardware
+    VARIANT_ESP32C3: False,  # hardware errata; same Kconfig escape hatch as S3
+    VARIANT_ESP32C5: False,  # SOC_ADC_PERIPH_NUM=1, no ADC2 hardware
+    VARIANT_ESP32C6: False,  # SOC_ADC_PERIPH_NUM=1, no ADC2 hardware
+    VARIANT_ESP32C61: False,  # SOC_ADC_PERIPH_NUM=1, no ADC2 hardware
+    VARIANT_ESP32H2: False,  # SOC_ADC_PERIPH_NUM=1, no ADC2 hardware
+    VARIANT_ESP32P4: True,  # ADC_LL_DIG_SUPPORTED_UNIT(UNIT) = 1 for both units
 }
+# TYPE1 output format (2 bytes, no unit bit): both pins must be on the same ADC unit
+_TYPE1_VARIANTS = {VARIANT_ESP32, VARIANT_ESP32S2}
 
-ESP32_VARIANT_ADC2_PIN_TO_CHANNEL = {
-    # TODO: add other variants
-    VARIANT_ESP32: {
-        4: adc_channel_t.ADC_CHANNEL_0,
-        0: adc_channel_t.ADC_CHANNEL_1,
-        2: adc_channel_t.ADC_CHANNEL_2,
-        15: adc_channel_t.ADC_CHANNEL_3,
-        13: adc_channel_t.ADC_CHANNEL_4,
-        12: adc_channel_t.ADC_CHANNEL_5,
-        14: adc_channel_t.ADC_CHANNEL_6,
-        27: adc_channel_t.ADC_CHANNEL_7,
-        25: adc_channel_t.ADC_CHANNEL_8,
-        26: adc_channel_t.ADC_CHANNEL_9,
-    },
-    VARIANT_ESP32S2: {
-        11: adc_channel_t.ADC_CHANNEL_0,
-        12: adc_channel_t.ADC_CHANNEL_1,
-        13: adc_channel_t.ADC_CHANNEL_2,
-        14: adc_channel_t.ADC_CHANNEL_3,
-        15: adc_channel_t.ADC_CHANNEL_4,
-        16: adc_channel_t.ADC_CHANNEL_5,
-        17: adc_channel_t.ADC_CHANNEL_6,
-        18: adc_channel_t.ADC_CHANNEL_7,
-        19: adc_channel_t.ADC_CHANNEL_8,
-        20: adc_channel_t.ADC_CHANNEL_9,
-    },
-    VARIANT_ESP32S3: {
-        11: adc_channel_t.ADC_CHANNEL_0,
-        12: adc_channel_t.ADC_CHANNEL_1,
-        13: adc_channel_t.ADC_CHANNEL_2,
-        14: adc_channel_t.ADC_CHANNEL_3,
-        15: adc_channel_t.ADC_CHANNEL_4,
-        16: adc_channel_t.ADC_CHANNEL_5,
-        17: adc_channel_t.ADC_CHANNEL_6,
-        18: adc_channel_t.ADC_CHANNEL_7,
-        19: adc_channel_t.ADC_CHANNEL_8,
-        20: adc_channel_t.ADC_CHANNEL_9,
-    },
-    VARIANT_ESP32C3: {
-        5: adc_channel_t.ADC_CHANNEL_0,
-    },
-}
+adc_digi_convert_mode_t = cg.global_ns.enum("adc_digi_convert_mode_t")
 
-ATTENUATION_MODES = {
-    "0db": cg.global_ns.ADC_ATTEN_DB_0,
-    "2.5db": cg.global_ns.ADC_ATTEN_DB_2_5,
-    "6db": cg.global_ns.ADC_ATTEN_DB_6,
-    "11db": cg.global_ns.ADC_ATTEN_DB_12,
-    "12db": cg.global_ns.ADC_ATTEN_DB_12,
-    "auto": "auto",
-}
+
+def _resolve_pin_unit(variant, pin_num, input_key):
+    """Return (adc_unit, adc_channel) for a pin, or raise cv.Invalid."""
+    adc1_pins = ESP32_VARIANT_ADC1_PIN_TO_CHANNEL.get(variant, {})
+    adc2_pins = ESP32_VARIANT_ADC2_PIN_TO_CHANNEL.get(variant, {})
+
+    if pin_num in adc1_pins:
+        return 1, adc1_pins[pin_num]
+    if pin_num in adc2_pins:
+        if not _ADC2_CONTINUOUS_STATUS.get(variant, False):
+            raise cv.Invalid(
+                f"Pin {pin_num} is on ADC2, which does not support continuous mode "
+                f"on {variant}. Use an ADC1 pin instead",
+                path=[input_key, CONF_PIN],
+            )
+        return 2, adc2_pins[pin_num]
+    raise cv.Invalid(
+        f"Pin {pin_num} is not a valid ADC pin for {variant}",
+        path=[input_key, CONF_PIN],
+    )
 
 
 def final_validate_config(config):
-    if not CORE.is_esp32:
-        raise cv.Invalid("Only ESP32 is supported at the moment")
-
     variant = get_esp32_variant()
-    if CONF_WIFI in fv.full_config.get() and any(
-        (pin := config[k][CONF_PIN][CONF_NUMBER])
-        in ESP32_VARIANT_ADC2_PIN_TO_CHANNEL[variant]
-        for k in [CONF_V_INPUT, CONF_I_INPUT]
-    ):
+
+    v_pin = config[CONF_V_INPUT][CONF_PIN][CONF_NUMBER]
+    i_pin = config[CONF_I_INPUT][CONF_PIN][CONF_NUMBER]
+
+    v_unit, _ = _resolve_pin_unit(variant, v_pin, CONF_V_INPUT)
+    i_unit, _ = _resolve_pin_unit(variant, i_pin, CONF_I_INPUT)
+
+    if v_unit != i_unit and variant in _TYPE1_VARIANTS:
         raise cv.Invalid(
-            f"{variant} doesn't support ADC on pin {pin} when Wi-Fi is configured"
+            f"V pin {v_pin} (ADC{v_unit}) and I pin {i_pin} (ADC{i_unit}) are on "
+            f"different units. {variant} uses TYPE1 output format which cannot "
+            f"distinguish units in the DMA data. Both pins must be on the same "
+            f"ADC unit",
         )
 
     return config
@@ -185,15 +110,15 @@ def final_validate_config(config):
 emon_ns = cg.esphome_ns.namespace("emon")
 Emon = emon_ns.class_("Emon", cg.Component)
 
-CONF_CALIBRATION = "cal"
+CONF_CAL = "cal"
 
 channel_schema = cv.Schema(
     {
         cv.Required(CONF_PIN): validate_adc_pin,
-        cv.SplitDefault(CONF_ATTENUATION, esp32="0db"): cv.All(
-            cv.only_on_esp32, cv.enum(ATTENUATION_MODES, lower=True)
+        cv.SplitDefault(CONF_ATTENUATION, esp32="0db"): cv.enum(
+            ATTENUATION_MODES, lower=True
         ),
-        cv.Optional(CONF_CALIBRATION, default=1.0): cv.Coerce(float),
+        cv.Optional(CONF_CAL, default=1.0): cv.Coerce(float),
     },
 )
 
@@ -203,43 +128,46 @@ CONF_I_INPUT = "i_input"
 CONF_DATA_INTERVAL = "data_interval"
 
 CONFIG_SCHEMA = cv.All(
-    {
-        cv.GenerateID(): cv.declare_id(Emon),
-        cv.Required(CONF_V_INPUT): channel_schema,
-        cv.Required(CONF_I_INPUT): channel_schema,
-        cv.Optional(
-            CONF_DATA_INTERVAL, default=TimePeriod(milliseconds=200)
-        ): cv.positive_not_null_time_period,
-        cv.Optional(CONF_VOLTAGE): sensor.sensor_schema(
-            unit_of_measurement=UNIT_VOLT,
-            accuracy_decimals=2,
-            device_class=DEVICE_CLASS_VOLTAGE,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-        cv.Optional(CONF_CURRENT): sensor.sensor_schema(
-            unit_of_measurement=UNIT_AMPERE,
-            accuracy_decimals=3,
-            device_class=DEVICE_CLASS_CURRENT,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-        cv.Optional(CONF_ACTIVE_POWER): sensor.sensor_schema(
-            unit_of_measurement=UNIT_WATT,
-            accuracy_decimals=2,
-            device_class=DEVICE_CLASS_POWER,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-        cv.Optional(CONF_APPARENT_POWER): sensor.sensor_schema(
-            unit_of_measurement=UNIT_VOLT_AMPS,
-            accuracy_decimals=2,
-            device_class=DEVICE_CLASS_APPARENT_POWER,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-        cv.Optional(CONF_POWER_FACTOR): sensor.sensor_schema(
-            accuracy_decimals=2,
-            device_class=DEVICE_CLASS_POWER_FACTOR,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-    }
+    cv.only_on_esp32,
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(Emon),
+            cv.Required(CONF_V_INPUT): channel_schema,
+            cv.Required(CONF_I_INPUT): channel_schema,
+            cv.Optional(
+                CONF_DATA_INTERVAL, default=TimePeriod(milliseconds=200)
+            ): cv.positive_not_null_time_period,
+            cv.Optional(CONF_VOLTAGE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CURRENT): sensor.sensor_schema(
+                unit_of_measurement=UNIT_AMPERE,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_CURRENT,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_ACTIVE_POWER): sensor.sensor_schema(
+                unit_of_measurement=UNIT_WATT,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_POWER,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_APPARENT_POWER): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT_AMPS,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_APPARENT_POWER,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_POWER_FACTOR): sensor.sensor_schema(
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_POWER_FACTOR,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
 )
 
 FINAL_VALIDATE_SCHEMA = final_validate_config
@@ -267,41 +195,45 @@ async def to_code(config):
     #     else:
     #         cg.add(var.set_attenuation(attenuation))
 
-    if CORE.is_esp32:
-        variant = get_esp32_variant()
-        unit = None
-        chan = None
-        for dim, set_dim in [(CONF_V_INPUT, var.set_v), (CONF_I_INPUT, var.set_i)]:
-            pin_num = config[dim][CONF_PIN][CONF_NUMBER]
-            if (
-                variant in ESP32_VARIANT_ADC1_PIN_TO_CHANNEL
-                and pin_num in ESP32_VARIANT_ADC1_PIN_TO_CHANNEL[variant]
-            ):
-                unit = adc_unit_t.ADC_UNIT_1
-                chan = ESP32_VARIANT_ADC1_PIN_TO_CHANNEL[variant][pin_num]
-            elif (
-                variant in ESP32_VARIANT_ADC2_PIN_TO_CHANNEL
-                and pin_num in ESP32_VARIANT_ADC2_PIN_TO_CHANNEL[variant]
-            ):
-                unit = adc_unit_t.ADC_UNIT_2
-                chan = ESP32_VARIANT_ADC2_PIN_TO_CHANNEL[variant][pin_num]
+    variant = get_esp32_variant()
+    adc1_pins = ESP32_VARIANT_ADC1_PIN_TO_CHANNEL.get(variant, {})
+    adc2_pins = ESP32_VARIANT_ADC2_PIN_TO_CHANNEL.get(variant, {})
 
-            if unit is not None and chan is not None:
-                cg.add(
-                    set_dim(
-                        unit,
-                        chan,
-                        config[dim].get(CONF_ATTENUATION),
-                        config[dim].get(CONF_CALIBRATION),
-                    )
-                )
-        for dim in [
-            CONF_VOLTAGE,
-            CONF_CURRENT,
-            CONF_ACTIVE_POWER,
-            CONF_APPARENT_POWER,
-            CONF_POWER_FACTOR,
-        ]:
-            if dim in config:
-                sens = await sensor.new_sensor(config[dim])
-                cg.add(getattr(var, f"set_{dim}_sensor")(sens))
+    units_used = set()
+    for dim, set_dim in [(CONF_V_INPUT, var.set_v), (CONF_I_INPUT, var.set_i)]:
+        pin_num = config[dim][CONF_PIN][CONF_NUMBER]
+        if pin_num in adc1_pins:
+            unit = adc_unit_t.ADC_UNIT_1
+            chan = adc1_pins[pin_num]
+            units_used.add(1)
+        else:
+            unit = adc_unit_t.ADC_UNIT_2
+            chan = adc2_pins[pin_num]
+            units_used.add(2)
+        cg.add(
+            set_dim(
+                unit,
+                chan,
+                config[dim].get(CONF_ATTENUATION),
+                config[dim].get(CONF_CAL),
+            )
+        )
+
+    if units_used == {1, 2}:
+        conv_mode = adc_digi_convert_mode_t.ADC_CONV_BOTH_UNIT
+    elif 2 in units_used:
+        conv_mode = adc_digi_convert_mode_t.ADC_CONV_SINGLE_UNIT_2
+    else:
+        conv_mode = adc_digi_convert_mode_t.ADC_CONV_SINGLE_UNIT_1
+    cg.add(var.set_conv_mode(conv_mode))
+
+    for dim in [
+        CONF_VOLTAGE,
+        CONF_CURRENT,
+        CONF_ACTIVE_POWER,
+        CONF_APPARENT_POWER,
+        CONF_POWER_FACTOR,
+    ]:
+        if dim in config:
+            sens = await sensor.new_sensor(config[dim])
+            cg.add(getattr(var, f"set_{dim}_sensor")(sens))
