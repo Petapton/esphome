@@ -19,7 +19,7 @@
 #define ADC_OUTPUT_TYPE ADC_DIGI_OUTPUT_FORMAT_TYPE1
 #define ADC_GET_DATA(p_data) ((p_data)->type1.data)
 #define ADC_GET_CHANNEL(p_data) ((p_data)->type1.channel)
-#define ADC_GET_UNIT(p_data) ADC_UNIT_1  // TODO: What happens when using ADC_UNIT_2 on ESP32-S2?
+#define ADC_GET_UNIT(p_data) ADC_UNIT_1  // TYPE1 has no unit bit
 #else
 #define ADC_OUTPUT_TYPE ADC_DIGI_OUTPUT_FORMAT_TYPE2
 #define ADC_GET_DATA(p_data) ((p_data)->type2.data)
@@ -38,7 +38,7 @@ struct EmonData {
   float pf;
 };
 
-class Emon : public Component, public sensor::Sensor {
+class Emon : public Component {
  public:
   float get_setup_priority() const override { return esphome::setup_priority::LATE; }
 
@@ -58,6 +58,8 @@ class Emon : public Component, public sensor::Sensor {
     this->i_attenuation_ = attenuation;
     this->i_cal_ = cal;
   }
+
+  void set_conv_mode(adc_digi_convert_mode_t mode) { this->conv_mode_ = mode; }
 
   void set_voltage_sensor(sensor::Sensor *voltage_sensor) { voltage_sensor_ = voltage_sensor; }
   void set_current_sensor(sensor::Sensor *current_sensor) { current_sensor_ = current_sensor; }
@@ -84,6 +86,7 @@ class Emon : public Component, public sensor::Sensor {
   adc_channel_t i_channel_;
   adc_atten_t v_attenuation_;
   adc_atten_t i_attenuation_;
+  adc_digi_convert_mode_t conv_mode_;
   float v_cal_;
   float i_cal_;
 

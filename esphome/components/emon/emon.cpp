@@ -5,8 +5,6 @@
 #include "freertos/semphr.h"
 #include <utility>
 
-#define TEST_WITH_DAC
-
 namespace esphome::emon {
 
 static const char *const TAG = "emon";
@@ -31,7 +29,12 @@ void Emon::setup() {
       .conv_frame_size = READ_LEN,
   };
 
-  ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &this->adc_handle_));
+  esp_err_t err = adc_continuous_new_handle(&adc_config, &this->adc_handle_);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "adc_continuous_new_handle failed: %s", esp_err_to_name(err));
+    this->mark_failed();
+    return;
+  }
 
   adc_digi_pattern_config_t adc_pattern[2] = {{
                                                   .atten = static_cast<uint8_t>(this->v_attenuation_),
@@ -50,24 +53,34 @@ void Emon::setup() {
       .pattern_num = 2,
       .adc_pattern = adc_pattern,
       .sample_freq_hz = ADC_SAMPLE_RATE_HZ,
-      .conv_mode = ADC_CONV_SINGLE_UNIT_1,  // TODO: Assign based on declared pins
+      .conv_mode = this->conv_mode_,
       .format = ADC_OUTPUT_TYPE,
   };
 
-  ESP_ERROR_CHECK(adc_continuous_config(this->adc_handle_, &dig_cfg));
+  err = adc_continuous_config(this->adc_handle_, &dig_cfg);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "adc_continuous_config failed: %s", esp_err_to_name(err));
+    this->mark_failed();
+    return;
+  }
 
   adc_continuous_evt_cbs_t adc_cbs = {
       .on_conv_done = s_conv_done_cb,
       .on_pool_ovf = nullptr,
   };
-  ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(this->adc_handle_, &adc_cbs, NULL));
-  ESP_ERROR_CHECK(adc_continuous_start(this->adc_handle_));
+  err = adc_continuous_register_event_callbacks(this->adc_handle_, &adc_cbs, NULL);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "adc_continuous_register_event_callbacks failed: %s", esp_err_to_name(err));
+    this->mark_failed();
+    return;
+  }
+  err = adc_continuous_start(this->adc_handle_);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "adc_continuous_start failed: %s", esp_err_to_name(err));
+    this->mark_failed();
+    return;
+  }
 }
-
-adc_digi_output_data_t *buf;
-uint16_t unit;
-uint16_t chan;
-uint16_t data;
 
 void Emon::loop() {
   esp_err_t ret = ESP_OK;
@@ -87,22 +100,24 @@ void Emon::loop() {
   // ESP_LOGD(TAG, "ret is %x, ret_num is %" PRIu32 " bytes, num_readings is %" PRIu32, ret, ret_num,
   //          ret_num / SOC_ADC_DIGI_RESULT_BYTES);
   for (int i = 0; i < ret_num && (this->v_idx_ < BUF_LEN || this->i_idx_ < BUF_LEN); i += SOC_ADC_DIGI_RESULT_BYTES) {
-    buf = (adc_digi_output_data_t *) &this->adc_conv_[i];
-    unit = ADC_GET_UNIT(buf);
-    chan = ADC_GET_CHANNEL(buf);
-    data = ADC_GET_DATA(buf);
-    /* Check the channel number validation, the data is invalid if the channel num exceed the maximum channel */
-    // if (chan > SOC_ADC_CHANNEL_NUM(unit)) {
-    //   // ESP_LOGW(TAG, "Invalid data [%" PRIu16 "_%" PRIx16 "]", chan, data);
-    //   continue;
-    // }
+    auto *buf = (adc_digi_output_data_t *) &this->adc_conv_[i];
+    uint16_t chan = ADC_GET_CHANNEL(buf);
+    uint16_t data = ADC_GET_DATA(buf);
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2
+    // TYPE1 format has no unit bit; validation enforces same-unit pins, so channel alone is unique
+    if (chan == this->v_channel_) {
+      this->v_data_[this->v_idx_++] = data;
+    } else if (chan == this->i_channel_) {
+      this->i_data_[this->i_idx_++] = data;
+    }
+#else
+    uint16_t unit = ADC_GET_UNIT(buf);
     if (unit == this->v_adc_unit_ && chan == this->v_channel_) {
       this->v_data_[this->v_idx_++] = data;
     } else if (unit == this->i_adc_unit_ && chan == this->i_channel_) {
       this->i_data_[this->i_idx_++] = data;
-    } else {
-      // ESP_LOGW(TAG, "Unknown channel [%" PRIu16 "_%" PRIx16 "]", chan, data);
     }
+#endif
   }
 
   if (this->v_idx_ < BUF_LEN || this->i_idx_ < BUF_LEN) {
@@ -200,6 +215,18 @@ void Emon::loop() {
   }
 }
 
-void Emon::dump_config() { LOG_SENSOR("", "Emon", this); }
+void Emon::dump_config() {
+  ESP_LOGCONFIG(TAG, "Emon:");
+  ESP_LOGCONFIG(TAG, "  Conv Mode: %d", this->conv_mode_);
+  ESP_LOGCONFIG(TAG, "  V Channel: unit=%d, channel=%d, atten=%d, cal=%.4f", this->v_adc_unit_, this->v_channel_,
+                this->v_attenuation_, this->v_cal_);
+  ESP_LOGCONFIG(TAG, "  I Channel: unit=%d, channel=%d, atten=%d, cal=%.4f", this->i_adc_unit_, this->i_channel_,
+                this->i_attenuation_, this->i_cal_);
+  LOG_SENSOR("  ", "Voltage", this->voltage_sensor_);
+  LOG_SENSOR("  ", "Current", this->current_sensor_);
+  LOG_SENSOR("  ", "Active Power", this->active_power_sensor_);
+  LOG_SENSOR("  ", "Apparent Power", this->apparent_power_sensor_);
+  LOG_SENSOR("  ", "Power Factor", this->power_factor_sensor_);
+}
 
 }  // namespace esphome::emon
