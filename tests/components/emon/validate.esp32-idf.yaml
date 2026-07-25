@@ -1,0 +1,16 @@
+sensor:
+  - platform: emon
+    v_input:
+      pin: GPIO36
+    i_input:
+      pin: GPIO39
+    voltage:
+      name: Voltage
+    current:
+      name: Current
+    active_power:
+      name: Active Power
+    apparent_power:
+      name: Apparent Power
+    power_factor:
+      name: Power Factor

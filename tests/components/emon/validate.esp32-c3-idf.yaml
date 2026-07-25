@@ -1,0 +1,8 @@
+sensor:
+  - platform: emon
+    v_input:
+      pin: GPIO0
+    i_input:
+      pin: GPIO1
+    voltage:
+      name: Voltage
