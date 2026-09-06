@@ -71,8 +71,10 @@ void DaikinMadoka::loop() {
 }
 
 void DaikinMadoka::control(const ClimateCall &call) {
-  if (this->node_state != espbt::ClientState::ESTABLISHED)
+  if (this->node_state != espbt::ClientState::ESTABLISHED) {
+    this->publish_state();  // Update state to reflect that the device is disconnected
     return;
+  }
 
   auto mode_opt = call.get_mode();
   if (mode_opt.has_value()) {
@@ -479,7 +481,7 @@ void DaikinMadoka::parse_cb_(std::vector<uint8_t> &msg) {
       break;
   }
 
-  this->publish_state();
+  this->set_timeout("publish_state", 800, [this]() { this->publish_state(); });
 }
 
 }  // namespace esphome::daikin_madoka
