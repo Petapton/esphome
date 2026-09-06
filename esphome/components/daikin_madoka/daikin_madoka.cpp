@@ -48,7 +48,7 @@ inline static uint32_t get_command_cooldown(uint16_t cmd) {
 }
 
 void DaikinMadoka::loop() {
-  if (!this->received_chunks_.empty()) {
+  while (!this->received_chunks_.empty()) {
     Chunk &chk = this->received_chunks_.front();
 
     if (chk.length != 0) {
