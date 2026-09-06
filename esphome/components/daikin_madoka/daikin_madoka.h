@@ -41,27 +41,27 @@ template<typename T> class VectorFIFO : std::vector<T> {
   size_t pop_index_ = 0;
 
   void compact_() {
-    this->erase(this->begin(), this->begin() + pop_index_);
-    pop_index_ = 0;
+    this->erase(this->begin(), this->begin() + this->pop_index_);
+    this->pop_index_ = 0;
   }
 
  public:
-  bool empty() const { return pop_index_ >= this->size(); }
+  bool empty() const { return this->pop_index_ >= this->size(); }
 
-  T &front() { return this->at(pop_index_); }
-  const T &front() const { return this->at(pop_index_); }
+  T &front() { return this->at(this->pop_index_); }
+  const T &front() const { return this->at(this->pop_index_); }
 
   void clear() {
-    std::vector<T>::clear();
-    pop_index_ = 0;
+    this->std::vector<T>::clear();
+    this->pop_index_ = 0;
   }
 
   void pop() {
     if (this->empty()) {
       return;
     }
-    pop_index_++;
-    if (pop_index_ >= this->size() / 2) {
+    this->pop_index_++;
+    if (this->pop_index_ >= this->size() / 2) {
       this->compact_();
     }
   }
