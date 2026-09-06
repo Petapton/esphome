@@ -11,12 +11,7 @@
 
 #include <esp_gattc_api.h>
 
-static const uint8_t MAX_CHUNK_SIZE = 20;
-static const uint8_t BLE_SEND_MAX_RETRIES = 5;
-
 namespace esphome::daikin_madoka {
-
-static const char *const TAG = "daikin_madoka";
 
 struct Status {
   bool status;
@@ -30,11 +25,17 @@ struct Query {
 
 namespace espbt = esphome::esp32_ble_tracker;
 
+static const uint8_t MAX_CHUNK_SIZE = 20;
+static const uint8_t BLE_SEND_MAX_RETRIES = 5;
+
 static const espbt::ESPBTUUID MADOKA_SERVICE_UUID = espbt::ESPBTUUID::from_raw("2141e110-213a-11e6-b67b-9e71128cae77");
 static const espbt::ESPBTUUID NOTIFY_CHARACTERISTIC_UUID =
     espbt::ESPBTUUID::from_raw("2141e111-213a-11e6-b67b-9e71128cae77");
 static const espbt::ESPBTUUID WWR_CHARACTERISTIC_UUID =
     espbt::ESPBTUUID::from_raw("2141e112-213a-11e6-b67b-9e71128cae77");
+
+static const float MIN_TEMP = 16.0f;
+static const float MAX_TEMP = 32.0f;
 
 template<typename T> class VectorFIFO : std::vector<T> {
  protected:
@@ -107,7 +108,6 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
                            esp_ble_gattc_cb_param_t *param) override;
   void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) override;
   void dump_config() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
   climate::ClimateTraits traits() override {
     auto traits = climate::ClimateTraits();
     traits.set_supported_modes({
@@ -124,8 +124,8 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
         climate::CLIMATE_FAN_HIGH,
         climate::CLIMATE_FAN_AUTO,
     });
-    traits.set_visual_min_temperature(16);
-    traits.set_visual_max_temperature(32);
+    traits.set_visual_min_temperature(MIN_TEMP);
+    traits.set_visual_max_temperature(MAX_TEMP);
     traits.set_visual_temperature_step(1);
     traits.add_feature_flags(climate::CLIMATE_SUPPORTS_TWO_POINT_TARGET_TEMPERATURE |
                              climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE);
