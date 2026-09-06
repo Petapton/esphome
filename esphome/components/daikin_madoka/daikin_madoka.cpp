@@ -161,11 +161,6 @@ void DaikinMadoka::control(const ClimateCall &call) {
 
 void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
   switch (event) {
-    case ESP_GAP_BLE_SEC_REQ_EVT:
-      if (!this->parent()->check_addr(param->ble_security.ble_req.bd_addr))
-        return;
-      esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
-      break;
     case ESP_GAP_BLE_NC_REQ_EVT:
       if (!this->parent()->check_addr(param->ble_security.key_notif.bd_addr))
         return;
@@ -188,10 +183,9 @@ void DaikinMadoka::gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_c
       this->notify_handle_ = nfy->handle;
       this->wwr_handle_ = wwr->handle;
 
-      auto status = esp_ble_gattc_register_for_notify(this->parent_->get_gattc_if(), this->parent_->get_remote_bda(),
-                                                      nfy->handle);
+      auto status = this->parent_->register_for_notify(nfy->handle);
       if (status) {
-        ESP_LOGW(TAG, "[%s] esp_ble_gattc_register_for_notify failed, status=%d", this->get_name().c_str(), status);
+        ESP_LOGW(TAG, "[%s] failed to register for notify, status=%d", this->get_name().c_str(), status);
       }
       break;
     }
@@ -204,6 +198,9 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
                                        esp_ble_gattc_cb_param_t *param) {
   switch (event) {
     case ESP_GATTC_DISCONNECT_EVT: {
+      this->notify_handle_ = 0;
+      this->wwr_handle_ = 0;
+
       this->node_state = espbt::ClientState::IDLE;
       this->current_temperature = NAN;
       this->target_temperature_high = NAN;
