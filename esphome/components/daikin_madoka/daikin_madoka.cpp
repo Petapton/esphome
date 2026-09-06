@@ -311,50 +311,56 @@ void DaikinMadoka::process_incoming_chunk_(const Chunk &chk) {
   }
 }
 
-std::vector<std::vector<uint8_t>> DaikinMadoka::split_payload_(std::vector<uint8_t> &msg) {
-  std::vector<std::vector<uint8_t>> result;
-  size_t len = msg.size();
-
-  // Add leading length byte
-  std::vector<uint8_t> buf{(uint8_t) (len + 1)};
-  buf.insert(buf.end(), msg.begin(), msg.end());
-
-  for (size_t i = 0; i <= len / (MAX_CHUNK_SIZE - 1); i++) {
-    std::vector<uint8_t> chunk{(uint8_t) i};
-    chunk.insert(chunk.end(), buf.begin() + (i * (MAX_CHUNK_SIZE - 1)),
-                 buf.begin() + std::min(buf.size(), (i + 1) * (MAX_CHUNK_SIZE - 1)));
-
-    result.push_back(chunk);
-  }
-
-  return result;
-}
-
 std::vector<uint8_t> DaikinMadoka::prepare_message_(uint16_t cmd, std::vector<uint8_t> &args) {
-  std::vector<uint8_t> result({0x00, (uint8_t) ((cmd >> 8) & 0xFF), (uint8_t) (cmd & 0xFF)});
+  // Leave first byte for length, then add 3 bytes for command, then add the args
+  std::vector<uint8_t> result({0x00, 0x00, (uint8_t) ((cmd >> 8) & 0xFF), (uint8_t) (cmd & 0xFF)});
   result.insert(result.end(), args.begin(), args.end());
   return result;
 }
 
-void DaikinMadoka::query_(uint16_t cmd, std::vector<uint8_t> &args) {
-  std::vector<uint8_t> payload = this->prepare_message_(cmd, args);
+esp_err_t DaikinMadoka::send_message_(std::span<uint8_t> chk) {
+  esp_err_t status = ESP_OK;
+  const char *addr = this->parent_->address_str();
 
+  for (int j = 0; j < BLE_SEND_MAX_RETRIES; j++) {
+    status = esp_ble_gattc_write_char(this->parent_->get_gattc_if(), this->parent_->get_conn_id(), this->wwr_handle_,
+                                      chk.size(), chk.data(), ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
+    if (!status) {
+      break;
+    }
+    ESP_LOGD(TAG, "[%s] esp_ble_gattc_write_char failed (%d of %d), status=%d", addr, j + 1, BLE_SEND_MAX_RETRIES,
+             status);
+  }
+  return status;
+}
+
+void DaikinMadoka::query_(uint16_t cmd, std::vector<uint8_t> &args) {
   if (this->node_state != espbt::ClientState::ESTABLISHED) {
     return;
   }
-  auto chunks = this->split_payload_(payload);
+
   const char *addr = this->parent_->address_str();
-  for (auto &chk : chunks) {
-    esp_err_t status = ESP_OK;
-    for (int j = 0; j < BLE_SEND_MAX_RETRIES; j++) {
-      status = esp_ble_gattc_write_char(this->parent_->get_gattc_if(), this->parent_->get_conn_id(), this->wwr_handle_,
-                                        chk.size(), chk.data(), ESP_GATT_WRITE_TYPE_NO_RSP, ESP_GATT_AUTH_REQ_NONE);
-      if (!status) {
-        break;
-      }
-      ESP_LOGD(TAG, "[%s] esp_ble_gattc_write_char failed (%d of %d), status=%d", addr, j + 1, BLE_SEND_MAX_RETRIES,
-               status);
-    }
+
+  std::vector<uint8_t> payload = this->prepare_message_(cmd, args);
+  size_t len = payload.size();
+
+  if (len > 255) {
+    ESP_LOGE(TAG, "[%s] Command too long to send, len=%zu", addr, len);
+    return;
+  }
+
+  // Populate leading length byte
+  payload[0] = (uint8_t) len;
+
+  Chunk chunk{};
+  for (size_t i = 0; i * (MAX_CHUNK_SIZE - 1) < len; i++) {
+    auto chunk_start = payload.begin() + (i * (MAX_CHUNK_SIZE - 1));
+    auto chunk_end = payload.begin() + std::min(payload.size(), (i + 1) * (MAX_CHUNK_SIZE - 1));
+    chunk.data[0] = (uint8_t) i;
+    std::copy(chunk_start, chunk_end, chunk.data.begin() + 1);
+    chunk.length = chunk_end - chunk_start + 1;
+
+    esp_err_t status = this->send_message_(std::span<uint8_t>(chunk.data.data(), chunk.length));
     if (status) {
       ESP_LOGE(TAG, "[%s] Command could not be sent, last status=%d", addr, status);
       return;
