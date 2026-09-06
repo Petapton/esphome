@@ -117,13 +117,13 @@ void DaikinMadoka::control(const ClimateCall &call) {
   std::vector<uint8_t> temp_setpoint_args;
   auto target_temperature_high_opt = call.get_target_temperature_high();
   if (target_temperature_high_opt.has_value()) {
-    uint16_t target_high = target_temperature_high_opt.value() * 128;
+    uint16_t target_high = std::clamp(target_temperature_high_opt.value(), MIN_TEMP, MAX_TEMP) * 128;
     temp_setpoint_args.insert(temp_setpoint_args.end(),
                               {0x20, 0x02, (uint8_t) ((target_high >> 8) & 0xFF), (uint8_t) (target_high & 0xFF)});
   }
   auto target_temperature_low_opt = call.get_target_temperature_low();
   if (target_temperature_low_opt.has_value()) {
-    uint16_t target_low = target_temperature_low_opt.value() * 128;
+    uint16_t target_low = std::clamp(target_temperature_low_opt.value(), MIN_TEMP, MAX_TEMP) * 128;
     temp_setpoint_args.insert(temp_setpoint_args.end(),
                               {0x21, 0x02, (uint8_t) ((target_low >> 8) & 0xFF), (uint8_t) (target_low & 0xFF)});
   }
