@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <array>
+#include <span>
 
 #include "esphome/core/component.h"
 #include "esphome/components/ble_client/ble_client.h"
@@ -74,10 +76,15 @@ template<typename T> class VectorFIFO : std::vector<T> {
   }
 };
 
+struct Chunk {
+  std::array<uint8_t, MAX_CHUNK_SIZE> data = {};
+  size_t length = 0;
+};
+
 class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLEClientNode, public PollingComponent {
  protected:
   bool should_update_ = false;
-  VectorFIFO<std::vector<uint8_t>> received_chunks_ = {};
+  VectorFIFO<Chunk> received_chunks_ = {};
   struct {
     std::vector<uint8_t> data = {};
     size_t expected_chunk_id = 0;
@@ -94,8 +101,8 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   std::vector<std::vector<uint8_t>> split_payload_(std::vector<uint8_t> &msg);
   std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> &args);
   void query_(uint16_t cmd, std::vector<uint8_t> &args);
-  void parse_cb_(std::vector<uint8_t> &msg);
-  void process_incoming_chunk_(std::vector<uint8_t> &chk);
+  void parse_cb_(std::span<const uint8_t> msg);
+  void process_incoming_chunk_(const Chunk &chk);
 
   void control(const climate::ClimateCall &call) override;
 

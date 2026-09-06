@@ -48,13 +48,13 @@ inline static uint32_t get_command_cooldown(uint16_t cmd) {
 }
 
 void DaikinMadoka::loop() {
-  std::vector<uint8_t> chk = {};
   if (!this->received_chunks_.empty()) {
-    chk = std::move(this->received_chunks_.front());
+    Chunk &chk = this->received_chunks_.front();
+
+    if (chk.length != 0) {
+      this->process_incoming_chunk_(chk);
+    }
     this->received_chunks_.pop();
-  }
-  if (!chk.empty()) {
-    this->process_incoming_chunk_(chk);
   }
 
   if (!this->query_queue_.empty() && !this->pending_message_) {
@@ -209,6 +209,7 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
       this->fan_mode.reset();
       this->publish_state();
 
+      this->received_chunks_.clear();
       this->partial_incoming_message_.data.clear();
       this->partial_incoming_message_.expected_chunk_id = 0;
       this->should_update_ = false;
@@ -239,9 +240,14 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
         ESP_LOGW(TAG, "Different notify handle");
         break;
       }
-      std::vector<uint8_t> chk =
-          std::vector<uint8_t>{param->notify.value, param->notify.value + param->notify.value_len};
-      this->received_chunks_.push(std::move(chk));
+      if (param->notify.value_len > MAX_CHUNK_SIZE) {
+        ESP_LOGW(TAG, "Received chunk too large: %d bytes", param->notify.value_len);
+        break;
+      }
+      Chunk chk{};
+      chk.length = param->notify.value_len;
+      std::copy(param->notify.value, param->notify.value + param->notify.value_len, chk.data.begin());
+      this->received_chunks_.push(chk);
       break;
     }
     default:
@@ -263,13 +269,13 @@ void DaikinMadoka::update() {
   }
 }
 
-void DaikinMadoka::process_incoming_chunk_(std::vector<uint8_t> &chk) {
-  if (chk.size() < 2) {
+void DaikinMadoka::process_incoming_chunk_(const Chunk &chk) {
+  if (chk.length < 2) {
     ESP_LOGI(TAG, "Chunk discarded: invalid length.");
     return;
   }
-  uint8_t chunk_id = chk[0];
-  std::vector<uint8_t> stripped{chk.begin() + 1, chk.end()};
+  uint8_t chunk_id = chk.data[0];
+  std::span<const uint8_t> stripped{chk.data.begin() + 1, chk.data.begin() + chk.length};
   if (chunk_id == 0 && stripped.size() == stripped[0]) {
     this->parse_cb_(stripped);
     return;
@@ -356,13 +362,13 @@ void DaikinMadoka::query_(uint16_t cmd, std::vector<uint8_t> &args) {
   }
 }
 
-using ArgPair = std::pair<uint16_t, std::vector<uint8_t>>;
+using ArgPair = std::pair<uint16_t, std::span<const uint8_t>>;
 
 static auto find_arg(const std::vector<ArgPair> &args, uint16_t arg_id) {
   return std::find_if(args.begin(), args.end(), [arg_id](const ArgPair &p) { return p.first == arg_id; });
 };
 
-void DaikinMadoka::parse_cb_(std::vector<uint8_t> &msg) {
+void DaikinMadoka::parse_cb_(std::span<const uint8_t> msg) {
   if (msg.size() < 4) {
     ESP_LOGE(TAG, "Discarding message: invalid length.");
     return;
@@ -379,7 +385,7 @@ void DaikinMadoka::parse_cb_(std::vector<uint8_t> &msg) {
       ESP_LOGE(TAG, "Discarding message: invalid argument length.");
       return;
     }
-    parsed_args.emplace_back(argument_id, std::vector<uint8_t>(msg.begin() + i, msg.begin() + i + len));
+    parsed_args.emplace_back(argument_id, std::span<const uint8_t>{msg.begin() + i, len});
     i += len;
   }
 
