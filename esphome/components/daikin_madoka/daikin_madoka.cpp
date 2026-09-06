@@ -318,13 +318,6 @@ void DaikinMadoka::process_incoming_chunk_(const Chunk &chk) {
   }
 }
 
-std::vector<uint8_t> DaikinMadoka::prepare_message_(uint16_t cmd, std::vector<uint8_t> &args) {
-  // Leave first byte for length, then add 3 bytes for command, then add the args
-  std::vector<uint8_t> result({0x00, 0x00, (uint8_t) ((cmd >> 8) & 0xFF), (uint8_t) (cmd & 0xFF)});
-  result.insert(result.end(), args.begin(), args.end());
-  return result;
-}
-
 esp_err_t DaikinMadoka::send_message_(std::span<uint8_t> chk) {
   esp_err_t status = ESP_OK;
   const char *addr = this->parent_->address_str();
@@ -348,7 +341,9 @@ void DaikinMadoka::query_(uint16_t cmd, std::vector<uint8_t> &args) {
 
   const char *addr = this->parent_->address_str();
 
-  std::vector<uint8_t> payload = this->prepare_message_(cmd, args);
+  // Leave first byte for length, then add 3 bytes for command, then add the args
+  std::vector<uint8_t> payload({0x00, 0x00, (uint8_t) ((cmd >> 8) & 0xFF), (uint8_t) (cmd & 0xFF)});
+  payload.insert(payload.end(), args.begin(), args.end());
   size_t len = payload.size();
 
   if (len > 255) {

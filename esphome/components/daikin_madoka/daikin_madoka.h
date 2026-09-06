@@ -98,7 +98,6 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
       .mode = 0,
   };
 
-  std::vector<uint8_t> prepare_message_(uint16_t cmd, std::vector<uint8_t> &args);
   esp_err_t send_message_(std::span<uint8_t> chk);
   void query_(uint16_t cmd, std::vector<uint8_t> &args);
   void parse_cb_(std::span<const uint8_t> msg);
