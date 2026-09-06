@@ -24,7 +24,7 @@ static const uint16_t CMD_GET_SENSOR_INFORMATION = 0x0110;
 
 void DaikinMadoka::dump_config() { LOG_CLIMATE(TAG, "Daikin Madoka Climate Controller", this); }
 
-void DaikinMadoka::setup() { this->receive_semaphore_ = xSemaphoreCreateMutex(); }
+void DaikinMadoka::setup() {}
 
 inline static uint32_t get_command_cooldown(uint16_t cmd) {
   switch (cmd) {
@@ -49,16 +49,14 @@ inline static uint32_t get_command_cooldown(uint16_t cmd) {
 
 void DaikinMadoka::loop() {
   std::vector<uint8_t> chk = {};
-  if (xSemaphoreTake(this->receive_semaphore_, 0L)) {
-    if (!this->received_chunks_.empty()) {
-      chk = std::move(this->received_chunks_.front());
-      this->received_chunks_.pop();
-    }
-    xSemaphoreGive(this->receive_semaphore_);
-    if (!chk.empty()) {
-      this->process_incoming_chunk_(chk);
-    }
+  if (!this->received_chunks_.empty()) {
+    chk = std::move(this->received_chunks_.front());
+    this->received_chunks_.pop();
   }
+  if (!chk.empty()) {
+    this->process_incoming_chunk_(chk);
+  }
+
   if (!this->query_queue_.empty() && !this->pending_message_) {
     Query query = std::move(this->query_queue_.front());
     this->query_queue_.pop();
@@ -244,9 +242,7 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
       }
       std::vector<uint8_t> chk =
           std::vector<uint8_t>{param->notify.value, param->notify.value + param->notify.value_len};
-      xSemaphoreTake(this->receive_semaphore_, portMAX_DELAY);
       this->received_chunks_.push(std::move(chk));
-      xSemaphoreGive(this->receive_semaphore_);
       break;
     }
     default:

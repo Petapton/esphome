@@ -86,7 +86,6 @@ class DaikinMadoka : public climate::Climate, public esphome::ble_client::BLECli
   bool pending_message_ = false;
   uint16_t notify_handle_{0};
   uint16_t wwr_handle_{0};
-  SemaphoreHandle_t receive_semaphore_{nullptr};
   Status cur_status_{
       .status = false,
       .mode = 0,
