@@ -231,6 +231,13 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
       break;
     }
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
+      if (param->reg_for_notify.handle != this->notify_handle_) {
+        break;
+      }
+      if (param->reg_for_notify.status != ESP_GATT_OK) {
+        ESP_LOGE(TAG, "Failed to register for notify, status = 0x%x", param->reg_for_notify.status);
+        break;
+      }
       this->node_state = espbt::ClientState::ESTABLISHED;
       this->should_update_ = true;
       break;
