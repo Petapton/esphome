@@ -253,15 +253,15 @@ void DaikinMadoka::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
 }
 
 void DaikinMadoka::update() {
+  static constexpr std::array<uint16_t, 5> ALL_CMDS{CMD_GET_SETTING_STATUS, CMD_GET_OPERATION_MODE, CMD_GET_SETPOINT,
+                                                    CMD_GET_FAN_SPEED, CMD_GET_SENSOR_INFORMATION};
+
   ESP_LOGD(TAG, "Got update request...");
   if (this->node_state != espbt::ClientState::ESTABLISHED) {
     ESP_LOGD(TAG, "...but device is disconnected");
     return;
   }
-
-  std::vector<uint16_t> all_cmds{CMD_GET_SETTING_STATUS, CMD_GET_OPERATION_MODE, CMD_GET_SETPOINT, CMD_GET_FAN_SPEED,
-                                 CMD_GET_SENSOR_INFORMATION};
-  for (auto cmd : all_cmds) {
+  for (auto cmd : ALL_CMDS) {
     this->query_queue_.emplace(cmd, std::vector<uint8_t>{0x00, 0x00});
   }
 }
