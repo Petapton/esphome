@@ -7,7 +7,7 @@ from esphome.components.adc import (
     adc_unit_t,
     validate_adc_pin,
 )
-from esphome.components.esp32 import get_esp32_variant
+from esphome.components.esp32 import get_esp32_variant, include_builtin_idf_component
 from esphome.components.esp32.const import (
     VARIANT_ESP32,
     VARIANT_ESP32C2,
@@ -178,6 +178,8 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     cg.add_define("DATA_INTERVAL_MS", config[CONF_DATA_INTERVAL].total_milliseconds)
+
+    include_builtin_idf_component("esp_adc")
 
     # if config[CONF_PIN] == "VCC":
     #     cg.add_define("USE_ADC_SENSOR_VCC")
