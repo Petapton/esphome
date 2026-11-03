@@ -4,9 +4,15 @@ from . import EpaperModel
 
 
 class SSD1683(EpaperModel):
+    source_files = (
+        "epaper_spi_mono.cpp",
+        "epaper_spi_ssd1683.cpp",
+    )
+
     def __init__(self, name, class_name="EPaperSSD1683", data_rate="20MHz", **defaults):
         defaults[CONF_DATA_RATE] = data_rate
-        super().__init__(name, class_name, **defaults)
+        defaults.setdefault("partial_update", True)
+        super().__init__(name, class_name=class_name, **defaults)
 
     # fmt: off
     def get_init_sequence(self, config: dict):
@@ -25,3 +31,14 @@ goodisplay_gdey042t81 = ssd1683.extend(
     width=400,
     height=300,
 )
+
+# Good Display GDEY029T94, 2.9" mono 128x296 (SSD1680), also sold by Seeed as 029BN-T94-D2.
+# Replaces the waveshare_epaper model gdey029t94.
+goodisplay_gdey029t94 = ssd1683.extend(
+    "goodisplay-gdey029t94-2.9",
+    width=128,
+    height=296,
+)
+
+# Name printed on the panel's label as sold by Seeed
+goodisplay_gdey029t94.extend("029bn-t94-d2")

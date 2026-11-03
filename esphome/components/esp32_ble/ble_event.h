@@ -207,13 +207,13 @@ class BLEEvent {
         StatusOnlyData scan_complete;  // 1 byte
         // Advertising complete events all have same structure
         // Used by: esp32_ble_beacon, esp32_ble server components
-        // ADV_DATA_SET, SCAN_RSP_DATA_SET, ADV_DATA_RAW_SET, ADV_START, ADV_STOP
+        // ADV_DATA_SET, SCAN_RSP_DATA_SET, ADV_DATA_RAW_SET, SCAN_RSP_DATA_RAW_SET, ADV_START, ADV_STOP
         StatusOnlyData adv_complete;  // 1 byte
         // RSSI complete event
         // Used by: ble_client (ble_rssi_sensor component)
         RSSICompleteData read_rssi_complete;  // 8 bytes
         // Security events - we store the full security union
-        // Used by: ble_client (automation), bluetooth_proxy, esp32_ble_client
+        // Used by: ble_client (automation), bluetooth_proxy, esp32_ble_client, esp32_ble_server
         esp_ble_sec_t security;  // Variable size, but fits within scan_result size
       };
     } gap;  // 80 bytes total
@@ -324,6 +324,9 @@ class BLEEvent {
       case ESP_GAP_BLE_ADV_DATA_RAW_SET_COMPLETE_EVT:  // Used by: esp32_ble_beacon
         this->event_.gap.adv_complete.status = p->adv_data_raw_cmpl.status;
         break;
+      case ESP_GAP_BLE_SCAN_RSP_DATA_RAW_SET_COMPLETE_EVT:  // Used by: raw advertisers with scan response
+        this->event_.gap.adv_complete.status = p->scan_rsp_data_raw_cmpl.status;
+        break;
       case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:  // Used by: esp32_ble_beacon
         this->event_.gap.adv_complete.status = p->adv_start_cmpl.status;
         break;
@@ -340,12 +343,12 @@ class BLEEvent {
         break;
 
       // Security events - copy the entire security union
-      // Used by: ble_client, bluetooth_proxy, esp32_ble_client
-      case ESP_GAP_BLE_AUTH_CMPL_EVT:      // Used by: bluetooth_proxy, esp32_ble_client
-      case ESP_GAP_BLE_SEC_REQ_EVT:        // Used by: esp32_ble_client
-      case ESP_GAP_BLE_PASSKEY_NOTIF_EVT:  // Used by: ble_client automation
-      case ESP_GAP_BLE_PASSKEY_REQ_EVT:    // Used by: ble_client automation
-      case ESP_GAP_BLE_NC_REQ_EVT:         // Used by: ble_client automation
+      // Used by: ble_client, bluetooth_proxy, esp32_ble_client, esp32_ble_server
+      case ESP_GAP_BLE_AUTH_CMPL_EVT:      // Used by: bluetooth_proxy, esp32_ble_client, esp32_ble_server
+      case ESP_GAP_BLE_SEC_REQ_EVT:        // Used by: esp32_ble_client, esp32_ble_server
+      case ESP_GAP_BLE_PASSKEY_NOTIF_EVT:  // Used by: ble_client, esp32_ble_server automations
+      case ESP_GAP_BLE_PASSKEY_REQ_EVT:    // Used by: ble_client, esp32_ble_server automations
+      case ESP_GAP_BLE_NC_REQ_EVT:         // Used by: ble_client, esp32_ble_server automations
         memcpy(&this->event_.gap.security, &p->ble_security, sizeof(esp_ble_sec_t));
         break;
 
